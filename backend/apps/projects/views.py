@@ -3,15 +3,22 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.projects.models import Project
-from apps.projects.serializers import EpisodeSerializer, ProjectCreateSerializer, ProjectSerializer
-from apps.projects.services import create_project, run_bible, run_segment, run_showrunner
-from apps.story.models import Episode
+from apps.projects.serializers import BeatSerializer, EpisodeSerializer, ProjectCreateSerializer, ProjectSerializer
+from apps.projects.services import (
+    create_project,
+    render_beat,
+    review_beat,
+    run_bible,
+    run_segment,
+    run_showrunner,
+)
+from apps.story.models import Beat, Episode
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
     queryset = Project.objects.prefetch_related(
-        "seasons__episodes__beats",
+        "seasons__episodes__beats__assets",
         "bibles__characters",
         "bibles__locations",
         "bibles__props",
@@ -46,8 +53,7 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Episode.objects.prefetch_related("beats").select_related("season__project")
     serializer_class = EpisodeSerializer
 
-    @action(detail=True, methods=["post"])
-    def segment(self, request, pk=None):
+    @action(detail=True, methods=["post"]):
         episode = self.get_object()
         script = request.data.get("script")
         run_segment(episode, script)

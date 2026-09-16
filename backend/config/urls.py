@@ -3,7 +3,7 @@ from django.http import JsonResponse
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from apps.projects.views import EpisodeViewSet, ProjectViewSet
+from apps.projects.views import BeatViewSet, EpisodeViewSet, ProjectViewSet
 
 
 def health(_request):
@@ -13,6 +13,7 @@ def health(_request):
 router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
 router.register("episodes", EpisodeViewSet, basename="episode")
+router.register("beats", BeatViewSet, basename="beat")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
