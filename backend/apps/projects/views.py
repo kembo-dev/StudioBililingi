@@ -6,11 +6,13 @@ from apps.projects.models import Project
 from apps.projects.serializers import BeatSerializer, EpisodeSerializer, ProjectCreateSerializer, ProjectSerializer
 from apps.projects.services import (
     create_project,
+    lock_bible,
     render_beat,
     review_beat,
     run_bible,
     run_segment,
     run_showrunner,
+    write_script,
 )
 from apps.story.models import Beat, Episode
 
@@ -48,10 +50,30 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data)
 
+    @action(detail=True, methods=["post"], url_path="lock-bible")
+    def lock_bible_action(self, request, pk=None):
+        project = self.get_object()
+        try:
+            lock_bible(project)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        project = self.get_queryset().get(pk=project.pk)
+        return Response(ProjectSerializer(project).data)
+
 
 class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Episode.objects.prefetch_related("beats").select_related("season__project")
+    queryset = Episode.objects.prefetch_related("beats", "scripts").select_related("season__project")
     serializer_class = EpisodeSerializer
+
+    @action(detail=True, methods=["post"], url_path="write-script")
+    def write_script_action(self, request, pk=None):
+        episode = self.get_object()
+        try:
+            write_script(episode)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        episode = self.get_queryset().get(pk=episode.pk)
+        return Response(EpisodeSerializer(episode).data)
 
     @action(detail=True, methods=["post"])
     def segment(self, request, pk=None):
