@@ -41,22 +41,18 @@ class WorldBibleSerializer(serializers.ModelSerializer):
 
 
 class BeatSerializer(serializers.ModelSerializer):
+    clip_uri = serializers.SerializerMethodField()
+
     class Meta:
         model = Beat
         fields = (
-            "id",
-            "index",
-            "take",
-            "text",
-            "word_count",
-            "duration_seconds",
-            "emotion",
-            "dialogue",
-            "video_prompt",
-            "backend",
-            "status",
-            "camera",
+            "id", "index", "take", "text", "word_count", "duration_seconds",
+            "emotion", "dialogue", "video_prompt", "backend", "status", "camera", "clip_uri",
         )
+
+    def get_clip_uri(self, obj):
+        clip = obj.assets.filter(role="clip").order_by("-id").first()
+        return clip.uri if clip else None
 
 
 class EpisodeSerializer(serializers.ModelSerializer):
@@ -81,20 +77,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = (
-            "id",
-            "title",
-            "slug",
-            "concept",
-            "genre",
-            "tone",
-            "ending_intent",
-            "aspect_ratio",
-            "status",
-            "created_at",
-            "seasons",
-            "bibles",
-        )
+        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "status", "created_at", "seasons", "bibles")
         read_only_fields = ("slug", "status", "created_at")
 
 
