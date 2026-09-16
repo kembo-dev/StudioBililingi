@@ -8,21 +8,24 @@ from .google import GoogleAudioBackend, GoogleImageBackend, GoogleTextBackend, G
 from .stub import StubAudioBackend, StubImageBackend, StubTextBackend, StubVideoBackend
 
 
-def _use_stubs() -> bool:
-    return os.getenv("STUDIO_BACKENDS", "stub") == "stub"
+def _choice(modality: str) -> str:
+    specific = os.getenv(f"STUDIO_{modality}_BACKEND", "").strip().lower()
+    if specific:
+        return specific
+    return os.getenv("STUDIO_BACKENDS", "stub").strip().lower()
 
 
 def get_text():
-    return StubTextBackend() if _use_stubs() else GoogleTextBackend()
+    return GoogleTextBackend() if _choice("TEXT") == "google" else StubTextBackend()
 
 
 def get_image():
-    return StubImageBackend() if _use_stubs() else GoogleImageBackend()
+    return GoogleImageBackend() if _choice("IMAGE") == "google" else StubImageBackend()
 
 
 def get_video():
-    return StubVideoBackend() if _use_stubs() else GoogleVideoBackend()
+    return GoogleVideoBackend() if _choice("VIDEO") == "google" else StubVideoBackend()
 
 
 def get_audio():
-    return StubAudioBackend() if _use_stubs() else GoogleAudioBackend()
+    return GoogleAudioBackend() if _choice("AUDIO") == "google" else StubAudioBackend()
