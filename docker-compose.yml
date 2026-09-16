@@ -5,8 +5,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-studiobililingi}
       POSTGRES_USER: ${POSTGRES_USER:-studio}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-studio}
-    ports:
-      - "5432:5432"
     volumes:
       - studio_pg:/var/lib/postgresql/data
     healthcheck:
@@ -17,8 +15,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
 
   api:
     build:
@@ -30,6 +26,7 @@ services:
       POSTGRES_PASSWORD: studio
       REDIS_URL: redis://redis:6379/0
       STUDIO_BACKENDS: stub
+      PYTHONPATH: /app:/agents:/packages
     ports:
       - "8000:8000"
     volumes:
@@ -41,7 +38,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "python manage.py makemigrations --noinput && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
 
   web:
     image: node:22-alpine
