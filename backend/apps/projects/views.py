@@ -53,9 +53,34 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Episode.objects.prefetch_related("beats").select_related("season__project")
     serializer_class = EpisodeSerializer
 
-    @action(detail=True, methods=["post"]):
+    @action(detail=True, methods=["post"])
+    def segment(self, request, pk=None):
         episode = self.get_object()
         script = request.data.get("script")
         run_segment(episode, script)
         episode = self.get_queryset().get(pk=episode.pk)
         return Response(EpisodeSerializer(episode).data)
+
+
+class BeatViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Beat.objects.prefetch_related("assets").select_related("episode__season__project")
+    serializer_class = BeatSerializer
+
+    @action(detail=True, methods=["post"])
+    def review(self, request, pk=None):
+        beat = self.get_object()
+        decision = request.data.get("decision", "approve")
+        comment = request.data.get("comment", "")
+        try:
+            review_beat(beat, decision, comment)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        beat = self.get_queryset().get(pk=beat.pk)
+        return Response(BeatSerializer(beat).data)
+
+    @action(detail=True, methods=["post"])
+    def render(self, request, pk=None):
+        beat = self.get_object()
+        render_beat(beat)
+        beat = self.get_queryset().get(pk=beat.pk)
+        return Response(BeatSerializer(beat).data)
