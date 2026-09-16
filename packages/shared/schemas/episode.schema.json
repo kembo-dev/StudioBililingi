@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://studiobililingi.dev/schemas/episode.schema.json",
+  "title": "Episode",
+  "type": "object",
+  "required": ["id", "project_id", "number", "title", "logline", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "project_id": { "type": "string" },
+    "season_number": { "type": "integer", "minimum": 1, "default": 1 },
+    "number": { "type": "integer", "minimum": 1 },
+    "title": { "type": "string" },
+    "logline": { "type": "string" },
+    "function_in_arc": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "outlined", "scripted", "segmented", "in_production", "review", "locked"]
+    },
+    "character_ids": { "type": "array", "items": { "type": "string" } },
+    "location_ids": { "type": "array", "items": { "type": "string" } },
+    "prop_ids": { "type": "array", "items": { "type": "string" } }
+  }
+}

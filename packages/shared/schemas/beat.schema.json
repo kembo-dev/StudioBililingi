@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://studiobililingi.dev/schemas/beat.schema.json",
+  "title": "Beat",
+  "description": "Atomic video unit. Target ~24 words of on-screen text/action, 6–8 seconds.",
+  "type": "object",
+  "required": ["id", "episode_id", "index", "text", "word_count", "character_ids", "location_id", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "episode_id": { "type": "string" },
+    "index": { "type": "integer", "minimum": 0 },
+    "text": { "type": "string", "maxLength": 280 },
+    "word_count": { "type": "integer", "minimum": 1, "maximum": 40 },
+    "duration_seconds": { "type": "number", "minimum": 4, "maximum": 12, "default": 8 },
+    "character_ids": { "type": "array", "items": { "type": "string" } },
+    "location_id": { "type": ["string", "null"] },
+    "prop_ids": { "type": "array", "items": { "type": "string" } },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "shot_size": { "type": "string" },
+        "angle": { "type": "string" },
+        "move": { "type": "string" },
+        "lens": { "type": "string" }
+      }
+    },
+    "emotion": { "type": "string" },
+    "dialogue": { "type": ["string", "null"] },
+    "video_prompt": { "type": "string" },
+    "negative_prompt": { "type": "string" },
+    "ingredient_asset_ids": { "type": "array", "items": { "type": "string" } },
+    "start_frame_asset_id": { "type": ["string", "null"] },
+    "end_frame_asset_id": { "type": ["string", "null"] },
+    "clip_asset_id": { "type": ["string", "null"] },
+    "take": { "type": "integer", "minimum": 1, "default": 1 },
+    "backend": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "approved_text", "ready_to_render", "rendering", "review", "rejected", "locked"]
+    }
+  }
+}

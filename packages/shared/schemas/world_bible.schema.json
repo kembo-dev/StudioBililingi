@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://studiobililingi.dev/schemas/world_bible.schema.json",
+  "title": "WorldBible",
+  "type": "object",
+  "required": ["version", "project_id", "logline", "tone", "characters", "locations", "props"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "project_id": { "type": "string" },
+    "logline": { "type": "string" },
+    "genre": { "type": "string" },
+    "tone": { "type": "string" },
+    "locked": { "type": "boolean" },
+    "characters": { "type": "array" },
+    "locations": { "type": "array" },
+    "props": { "type": "array" }
+  }
+}
