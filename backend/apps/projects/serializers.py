@@ -45,10 +45,7 @@ class BeatSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Beat
-        fields = (
-            "id", "index", "take", "text", "word_count", "duration_seconds",
-            "emotion", "dialogue", "video_prompt", "backend", "status", "camera", "clip_uri",
-        )
+        fields = ("id", "index", "take", "text", "word_count", "duration_seconds", "emotion", "dialogue", "video_prompt", "backend", "status", "camera", "clip_uri")
 
     def get_clip_uri(self, obj):
         clip = obj.assets.filter(role="clip").order_by("-id").first()
@@ -57,10 +54,15 @@ class BeatSerializer(serializers.ModelSerializer):
 
 class EpisodeSerializer(serializers.ModelSerializer):
     beats = BeatSerializer(many=True, read_only=True)
+    latest_script = serializers.SerializerMethodField()
 
     class Meta:
         model = Episode
-        fields = ("id", "number", "title", "logline", "function_in_arc", "status", "beats")
+        fields = ("id", "number", "title", "logline", "function_in_arc", "status", "beats", "latest_script")
+
+    def get_latest_script(self, obj):
+        script = obj.scripts.order_by("-version").first()
+        return script.fountain if script else ""
 
 
 class SeasonSerializer(serializers.ModelSerializer):
@@ -74,11 +76,20 @@ class SeasonSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     seasons = SeasonSerializer(many=True, read_only=True)
     bibles = WorldBibleSerializer(many=True, read_only=True)
+    refs = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
-        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "status", "created_at", "seasons", "bibles")
+        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "status", "created_at", "seasons", "bibles", "refs")
         read_only_fields = ("slug", "status", "created_at")
+
+    def get_refs(self, obj):
+        roles = {"character_ref", "location_ref", "prop_ref"}
+        return [
+            {"id": asset.id, "role": asset.role, "uri": asset.uri, "provider": asset.provider, "meta": asset.meta}
+            for asset in obj.assets.all()
+            if asset.role in roles
+        ]
 
 
 class ProjectCreateSerializer(serializers.Serializer):
