@@ -14,6 +14,7 @@ from apps.projects.services import (
     run_showrunner,
     write_script,
 )
+from apps.projects.visuals import generate_refs
 from apps.story.models import Beat, Episode
 
 
@@ -24,6 +25,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         "bibles__characters",
         "bibles__locations",
         "bibles__props",
+        "assets",
     ).order_by("-created_at")
     serializer_class = ProjectSerializer
 
@@ -55,6 +57,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         try:
             lock_bible(project)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        project = self.get_queryset().get(pk=project.pk)
+        return Response(ProjectSerializer(project).data)
+
+    @action(detail=True, methods=["post"], url_path="generate-refs")
+    def generate_refs_action(self, request, pk=None):
+        project = self.get_object()
+        try:
+            generate_refs(project)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         project = self.get_queryset().get(pk=project.pk)
