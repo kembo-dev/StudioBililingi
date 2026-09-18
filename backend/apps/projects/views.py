@@ -98,6 +98,22 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
         episode = self.get_queryset().get(pk=episode.pk)
         return Response(EpisodeSerializer(episode).data)
 
+    @action(detail=True, methods=["post"])
+    def assemble(self, request, pk=None):
+        from apps.jobs.models import Job
+        from apps.jobs.queue import enqueue, is_eager
+
+        episode = self.get_object()
+        job = enqueue(
+            project=episode.season.project,
+            kind=Job.Kind.ASSEMBLY,
+            agent_role="editor",
+            payload={"episode_id": episode.id},
+        )
+        if is_eager() and job.status == Job.Status.FAILED:
+            return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"job_id": job.id, "status": job.status, "result": job.result})
+
 
 class BeatViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Beat.objects.prefetch_related("assets").select_related("episode__season__project")
@@ -121,7 +137,7 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
         decision = request.data.get("decision", "approve")
         comment = request.data.get("comment", "")
         try:
-            review_beat(beat, decision, comment)
+            review_beat(beat, decision, comment, take_id=request.data.get("take_id"))
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         beat = self.get_queryset().get(pk=beat.pk)
