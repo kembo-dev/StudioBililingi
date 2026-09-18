@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
+import uuid
+from pathlib import Path
 
 
 def _parse_json(text: str) -> dict:
@@ -24,24 +27,46 @@ def _parse_json(text: str) -> dict:
     return data
 
 
+def _client():
+    from google import genai
+
+    use_vertex = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {"1", "true", "yes"}
+    if use_vertex:
+        return genai.Client(
+            vertexai=True,
+            project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        )
+    return genai.Client()
+
+
+def _media_root() -> Path:
+    raw = os.getenv("STUDIO_MEDIA_DIR", "").strip()
+    path = Path(raw) if raw else Path(__file__).resolve().parents[2] / "backend" / "media"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _save_bytes(folder: str, data: bytes, suffix: str) -> str:
+    directory = _media_root() / folder
+    directory.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4().hex}{suffix}"
+    (directory / name).write_bytes(data)
+    return f"/media/{folder}/{name}"
+
+
+def _usable(uri: str | None) -> bool:
+    return bool(uri) and uri.startswith(("http://", "https://", "gs://", "/media/"))
+
+
 class GoogleTextBackend:
     provider_id = "google-gemini"
 
     def generate_json(self, system: str, user: str) -> dict:
-        from google import genai
         from google.genai import types
 
-        use_vertex = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {"1", "true", "yes"}
-        kwargs: dict = {}
-        if use_vertex:
-            kwargs = {
-                "vertexai": True,
-                "project": os.getenv("GOOGLE_CLOUD_PROJECT"),
-                "location": os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
-            }
-        client = genai.Client(**kwargs)
         model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-        response = client.models.generate_content(
+        response = _client().models.generate_content(
             model=model,
             contents=user,
             config=types.GenerateContentConfig(
@@ -60,14 +85,77 @@ class GoogleImageBackend:
     provider_id = "google-nano-banana"
 
     def generate(self, prompt: str, refs: list[str] | None = None) -> str:
-        raise NotImplementedError("Nano Banana / Gemini Image not wired yet")
+        model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+        response = _client().models.generate_content(model=model, contents=prompt)
+        for candidate in getattr(response, "candidates", None) or []:
+            content = getattr(candidate, "content", None)
+            for part in getattr(content, "parts", None) or []:
+                inline = getattr(part, "inline_data", None) or getattr(part, "inlineData", None)
+                data = getattr(inline, "data", None) if inline else None
+                mime = getattr(inline, "mime_type", None) or getattr(inline, "mimeType", None) or "image/png"
+                if data:
+                    if isinstance(data, str):
+                        import base64
+                        data = base64.b64decode(data)
+                    suffix = ".jpg" if "jpeg" in mime else ".png"
+                    return _save_bytes("refs", data, suffix)
+        raise RuntimeError(f"Gemini Image returned no bytes ({model})")
 
 
 class GoogleVideoBackend:
     provider_id = "google-veo-3.1"
 
-    def render(self, prompt: str, *, start_frame=None, end_frame=None, ingredients=None, duration_seconds=8, aspect_ratio="16:9") -> str:
-        raise NotImplementedError("Veo 3.1 / Omni Flash not wired yet")
+    def render(
+        self,
+        prompt: str,
+        *,
+        start_frame=None,
+        end_frame=None,
+        ingredients=None,
+        duration_seconds=8,
+        aspect_ratio="16:9",
+    ) -> str:
+        from google.genai import types
+
+        model = os.getenv("VEO_MODEL", "veo-3.1-generate-preview")
+        usable = [uri for uri in (ingredients or []) if _usable(uri)]
+        text = prompt
+        if _usable(start_frame):
+            text += f"\nStart frame / location plate: {start_frame}"
+        if usable:
+            text += "\nVisual ingredients (keep identity): " + ", ".join(usable)
+        try:
+            config = types.GenerateVideosConfig(aspect_ratio=aspect_ratio)
+        except TypeError:
+            config = None
+        client = _client()
+        kwargs = {"model": model, "prompt": text}
+        if config is not None:
+            kwargs["config"] = config
+        operation = client.models.generate_videos(**kwargs)
+        timeout = int(os.getenv("VEO_TIMEOUT_SECONDS", "300"))
+        started = time.time()
+        while not getattr(operation, "done", False):
+            if time.time() - started > timeout:
+                raise TimeoutError(f"Veo timed out after {timeout}s")
+            time.sleep(8)
+            operation = client.operations.get(operation)
+        response = getattr(operation, "response", None) or getattr(operation, "result", None)
+        videos = getattr(response, "generated_videos", None) or []
+        if not videos:
+            raise RuntimeError("Veo returned no video")
+        video = videos[0]
+        video_file = getattr(video, "video", None)
+        data = getattr(video_file, "video_bytes", None) if video_file else None
+        if data:
+            if isinstance(data, str):
+                import base64
+                data = base64.b64decode(data)
+            return _save_bytes("clips", data, ".mp4")
+        uri = getattr(video_file, "uri", None) if video_file else getattr(video, "uri", None)
+        if uri:
+            return uri
+        raise RuntimeError("Veo video had neither bytes nor uri")
 
 
 class GoogleAudioBackend:
