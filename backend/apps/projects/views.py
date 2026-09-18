@@ -2,12 +2,12 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.projects.continuity import render_beat
 from apps.projects.models import Project
 from apps.projects.serializers import BeatSerializer, EpisodeSerializer, ProjectCreateSerializer, ProjectSerializer
 from apps.projects.services import (
     create_project,
     lock_bible,
-    render_beat,
     review_beat,
     run_bible,
     run_segment,
