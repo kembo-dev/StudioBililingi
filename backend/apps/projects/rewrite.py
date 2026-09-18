@@ -1,5 +1,5 @@
 from apps.production.models import Review
-from apps.story.models import Beat
+from apps.story.models import Beat, BeatTake
 
 FORMS = ("storytell", "voix_off", "conversation", "rencontre")
 
@@ -40,14 +40,16 @@ def recontextualize_beat(beat: Beat, instruction: str, form: str = "storytell") 
         text = ""
     if not text:
         text = _fallback_text(beat, prompt, form)
-    beat.text = text[:400]
-    beat.word_count = len(beat.text.split())
-    beat.video_prompt = beat.text
-    camera = dict(beat.camera or {})
-    camera["form"] = form
-    beat.camera = camera
-    beat.status = Beat.Status.DRAFT
-    beat.take = beat.take + 1
-    beat.save(update_fields=["text", "word_count", "video_prompt", "camera", "status", "take"])
+    # Recontextualization creates a draft take instead of mutating the canonical beat.
+    next_number = (beat.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
+    BeatTake.objects.create(
+        beat=beat,
+        number=next_number,
+        prompt=text[:400],
+        negative_prompt=beat.negative_prompt,
+        backend=beat.backend,
+        status=BeatTake.Status.QUEUED,
+        generation_meta={"form": form, "rewrite_instruction": prompt, "source_text": beat.text},
+    )
     Review.objects.create(beat=beat, episode=beat.episode, decision=Review.Decision.REVISE, comment=f"[{form}] {prompt}")
     return beat
