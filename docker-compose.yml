@@ -60,7 +60,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    command: celery -A config worker -l info
+    command: celery -A config.celery worker -l info --pool=solo
 
   web:
     image: node:22-alpine
