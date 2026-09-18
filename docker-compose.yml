@@ -40,6 +40,28 @@ services:
         condition: service_started
     command: sh -c "python manage.py makemigrations --noinput && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
 
+  worker:
+    build:
+      context: ./backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: studiobililingi
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: studio
+      REDIS_URL: redis://redis:6379/0
+      STUDIO_BACKENDS: stub
+      PYTHONPATH: /app:/agents:/packages
+    volumes:
+      - ./backend:/app
+      - ./agents:/agents
+      - ./packages:/packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: celery -A config worker -l info
+
   web:
     image: node:22-alpine
     working_dir: /app
