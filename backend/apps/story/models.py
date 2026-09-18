@@ -70,7 +70,7 @@ class Beat(models.Model):
         LOCKED = "locked"
 
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="beats")
-    script = models.ForeignKey(Script, on_delete=models.CASCADE, related_name="beats")
+    script = models.ForeignKey(Script, on_delete=models.SET_NULL, null=True, blank=True, related_name="beats")
     scene = models.ForeignKey(Scene, on_delete=models.SET_NULL, null=True, blank=True, related_name="beats")
     index = models.PositiveIntegerField()
     text = models.TextField(help_text="~24 words of action / dialogue")
