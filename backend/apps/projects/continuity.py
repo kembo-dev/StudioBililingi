@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from apps.production.models import Asset
-from apps.story.models import Beat
+from apps.story.models import Beat, BeatTake
 
 
 def _latest_ref(project, role: str, key: str | None = None):
@@ -51,6 +51,16 @@ def render_beat(beat: Beat) -> Beat:
     pack = resolve_ingredients(beat)
     backend = get_video()
     prompt = beat.video_prompt or beat.text
+    next_number = (beat.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
+    take = BeatTake.objects.create(
+        beat=beat,
+        number=next_number,
+        prompt=prompt,
+        negative_prompt=beat.negative_prompt,
+        backend=getattr(backend, "provider_id", beat.backend),
+        status=BeatTake.Status.RENDERING,
+        generation_meta={"ingredients": pack["items"]},
+    )
 
     if beat.status == Beat.Status.DRAFT:
         beat.status = Beat.Status.APPROVED_TEXT
@@ -73,11 +83,17 @@ def render_beat(beat: Beat) -> Beat:
             role=Asset.Role.CLIP,
             uri=uri,
             provider=getattr(backend, "provider_id", ""),
-            meta={"prompt": prompt, "ingredients": pack["items"], "take": beat.take},
+            meta={"prompt": prompt, "ingredients": pack["items"], "take": take.number, "take_id": take.id},
         )
+        take.uri = uri
+        take.status = BeatTake.Status.REVIEW
+        take.save(update_fields=["uri", "status"])
+        beat.take = take.number
         beat.status = Beat.Status.REVIEW
-        beat.save(update_fields=["status"])
+        beat.save(update_fields=["status", "take"])
     except Exception:
+        take.status = BeatTake.Status.FAILED
+        take.save(update_fields=["status"])
         beat.status = Beat.Status.REJECTED
         beat.save(update_fields=["status"])
         raise
