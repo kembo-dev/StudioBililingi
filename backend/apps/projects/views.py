@@ -103,6 +103,18 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Beat.objects.prefetch_related("assets").select_related("episode__season__project")
     serializer_class = BeatSerializer
 
+    @action(detail=True, methods=["post"], url_path="recontextualize")
+    def recontextualize(self, request, pk=None):
+        from apps.projects.rewrite import recontextualize_beat
+
+        beat = self.get_object()
+        try:
+            recontextualize_beat(beat, request.data.get("prompt") or request.data.get("instruction") or "")
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        beat = self.get_queryset().get(pk=beat.pk)
+        return Response(BeatSerializer(beat).data)
+
     @action(detail=True, methods=["post"])
     def review(self, request, pk=None):
         beat = self.get_object()
