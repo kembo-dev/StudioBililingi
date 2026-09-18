@@ -1,0 +1,120 @@
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from django.test import TestCase
+
+from apps.accounts.models import Organization
+from apps.production.models import Review
+from apps.projects.assembly import assemble_episode
+from apps.projects.models import Project, Season
+from apps.projects.services import persist_beats, review_beat
+from apps.story.models import Beat, BeatTake, Episode, Script
+
+
+class ProductionPipelineTests(TestCase):
+    def setUp(self):
+        org = Organization.objects.create(name="Test Studio", slug="test-studio")
+        self.project = Project.objects.create(
+            organization=org,
+            title="Test",
+            slug="test",
+            concept="Concept de test",
+            delivery="voix_off",
+        )
+        self.season = Season.objects.create(project=self.project, number=1)
+        self.episode = Episode.objects.create(
+            season=self.season,
+            number=1,
+            title="Episode 1",
+            logline="Test",
+        )
+
+    def test_resegmentation_preserves_previous_script_and_beats(self):
+        first = persist_beats(self.episode, [{"text": "Premier beat", "scene_index": 1}])
+        first_id = first[0].id
+        first_script_id = first[0].script_id
+
+        second = persist_beats(self.episode, [{"text": "Deuxieme beat", "scene_index": 1}])
+
+        self.assertEqual(Script.objects.filter(episode=self.episode).count(), 2)
+        self.assertTrue(Beat.objects.filter(pk=first_id, script_id=first_script_id).exists())
+        self.assertNotEqual(second[0].script_id, first_script_id)
+        self.assertEqual(self.episode.scenes.count(), 2)
+
+    def test_structured_segmentation_metadata_is_persisted(self):
+        beat = persist_beats(self.episode, [{
+            "text": "Une action precise",
+            "scene_index": 2,
+            "scene_heading": "INT. STUDIO - NUIT",
+            "time_of_day": "nuit",
+            "lighting": "faible",
+            "camera": {"shot": "close-up"},
+            "continuity": {"wardrobe": "chemise blanche"},
+            "emotion": "tension",
+            "dialogue": "Allo ?",
+            "negative_prompt": "texte incruste",
+            "duration_seconds": 6,
+        }])[0]
+
+        self.assertEqual(beat.scene.index, 2)
+        self.assertEqual(beat.scene.heading, "INT. STUDIO - NUIT")
+        self.assertEqual(beat.camera["shot"], "close-up")
+        self.assertEqual(beat.continuity["wardrobe"], "chemise blanche")
+        self.assertEqual(beat.emotion, "tension")
+        self.assertEqual(beat.dialogue, "Allo ?")
+
+    def test_review_locks_exact_take_and_unlocks_previous(self):
+        beat = persist_beats(self.episode, [{"text": "Beat"}])[0]
+        first = BeatTake.objects.create(beat=beat, number=1, uri="file:///tmp/one.mp4", status=BeatTake.Status.LOCKED)
+        second = BeatTake.objects.create(beat=beat, number=2, uri="file:///tmp/two.mp4", status=BeatTake.Status.REVIEW)
+
+        review_beat(beat, "approve", take_id=second.id)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        beat.refresh_from_db()
+        self.assertEqual(first.status, BeatTake.Status.REVIEW)
+        self.assertEqual(second.status, BeatTake.Status.LOCKED)
+        self.assertEqual(beat.take, 2)
+        self.assertEqual(beat.status, Beat.Status.LOCKED)
+        self.assertTrue(Review.objects.filter(beat_take=second, decision="approve").exists())
+
+    def test_review_refuses_take_without_video(self):
+        beat = persist_beats(self.episode, [{"text": "Beat"}])[0]
+        take = BeatTake.objects.create(beat=beat, number=1, status=BeatTake.Status.REVIEW)
+
+        with self.assertRaisesMessage(ValueError, "sans vidéo"):
+            review_beat(beat, "approve", take_id=take.id)
+
+    def test_assembly_requires_locked_take_for_every_latest_beat(self):
+        beats = persist_beats(self.episode, [{"text": "Un"}, {"text": "Deux"}])
+        BeatTake.objects.create(beat=beats[0], number=1, uri="file:///tmp/one.mp4", status=BeatTake.Status.LOCKED)
+
+        with self.assertRaisesMessage(ValueError, "aucun take verrouillé"):
+            assemble_episode(self.episode)
+
+    def test_assembly_uses_locked_takes_in_beat_order(self):
+        beats = persist_beats(self.episode, [{"text": "Un"}, {"text": "Deux"}])
+        with TemporaryDirectory() as tmp:
+            clips = []
+            for i, beat in enumerate(beats):
+                path = Path(tmp) / f"{i}.mp4"
+                path.write_bytes(b"fake")
+                clips.append(path)
+                BeatTake.objects.create(
+                    beat=beat,
+                    number=1,
+                    uri=path.as_uri(),
+                    status=BeatTake.Status.LOCKED,
+                )
+
+            media = Path(tmp) / "media"
+            with patch.dict("os.environ", {"STUDIO_MEDIA_ROOT": str(media)}), patch("apps.projects.assembly.subprocess.run") as run:
+                asset = assemble_episode(self.episode)
+
+            run.assert_called_once()
+            manifest = run.call_args.args[0]
+            self.assertEqual(manifest[0], "ffmpeg")
+            self.assertEqual(asset.role, "episode_cut")
+            self.assertEqual([row["beat_id"] for row in asset.meta["takes"]], [b.id for b in beats])
