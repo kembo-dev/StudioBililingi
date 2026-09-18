@@ -1,39 +1,42 @@
 from __future__ import annotations
 
-from apps.jobs.models import Job
 from apps.production.models import Asset
 from apps.story.models import Beat
 
 
 def _latest_ref(project, role: str, key: str | None = None):
     qs = project.assets.filter(role=role).order_by("-id")
-    if key:
-        for asset in qs:
-            if (asset.meta or {}).get("key") == key:
-                return asset
-    return qs.first()
+    if not key:
+        return None
+    for asset in qs:
+        if (asset.meta or {}).get("key") == key:
+            return asset
+    return None
 
 
 def resolve_ingredients(beat: Beat) -> dict:
+    """Resolve only references explicitly attached to the beat.
+
+    Never fall back to every character/prop in the project: doing so leaks
+    unrelated continuity into video generation.
+    """
     project = beat.episode.season.project
     picked = []
 
-    keys = {c.key for c in beat.characters.all()} or {c.key for c in project.characters.all()}
-    for key in keys:
-        asset = _latest_ref(project, Asset.Role.CHARACTER_REF, key)
+    for character in beat.characters.all():
+        asset = _latest_ref(project, Asset.Role.CHARACTER_REF, character.key)
         if asset:
-            picked.append({"role": asset.role, "key": key, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
+            picked.append({"role": asset.role, "key": character.key, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
 
-    loc_key = beat.location.key if beat.location_id else None
-    loc = _latest_ref(project, Asset.Role.LOCATION_REF, loc_key)
-    if loc:
-        picked.append({"role": loc.role, "key": (loc.meta or {}).get("key"), "uri": loc.uri, "name": (loc.meta or {}).get("name")})
+    if beat.location_id:
+        loc = _latest_ref(project, Asset.Role.LOCATION_REF, beat.location.key)
+        if loc:
+            picked.append({"role": loc.role, "key": beat.location.key, "uri": loc.uri, "name": (loc.meta or {}).get("name")})
 
-    prop_keys = {p.key for p in beat.props.all()} or {p.key for p in project.props.all()}
-    for key in prop_keys:
-        asset = _latest_ref(project, Asset.Role.PROP_REF, key)
+    for prop in beat.props.all():
+        asset = _latest_ref(project, Asset.Role.PROP_REF, prop.key)
         if asset:
-            picked.append({"role": asset.role, "key": key, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
+            picked.append({"role": asset.role, "key": prop.key, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
 
     uris = [item["uri"] for item in picked if item.get("uri")]
     start = next((item["uri"] for item in picked if item["role"] == Asset.Role.LOCATION_REF), None)
@@ -41,17 +44,20 @@ def resolve_ingredients(beat: Beat) -> dict:
 
 
 def render_beat(beat: Beat) -> Beat:
+    """Render a beat. The caller/queue owns the Job lifecycle."""
     from agents.backends import get_video
 
+    project = beat.episode.season.project
     pack = resolve_ingredients(beat)
+    backend = get_video()
+    prompt = beat.video_prompt or beat.text
+
     if beat.status == Beat.Status.DRAFT:
         beat.status = Beat.Status.APPROVED_TEXT
         beat.save(update_fields=["status"])
     beat.status = Beat.Status.RENDERING
     beat.save(update_fields=["status"])
-    backend = get_video()
-    prompt = beat.video_prompt or beat.text
-    project = beat.episode.season.project
+
     try:
         uri = backend.render(
             prompt,
@@ -67,29 +73,12 @@ def render_beat(beat: Beat) -> Beat:
             role=Asset.Role.CLIP,
             uri=uri,
             provider=getattr(backend, "provider_id", ""),
-            meta={"prompt": prompt, "take": beat.take, "ingredients": pack["items"], "start_frame": pack["start_frame"]},
-        )
-        Job.objects.create(
-            project=project,
-            kind=Job.Kind.VIDEO,
-            status=Job.Status.SUCCEEDED,
-            agent_role="cinematographer",
-            backend=getattr(backend, "provider_id", ""),
-            result={"beat_id": beat.id, "uri": uri, "ingredients": len(pack["uris"])},
+            meta={"prompt": prompt, "ingredients": pack["items"], "take": beat.take},
         )
         beat.status = Beat.Status.REVIEW
         beat.save(update_fields=["status"])
-    except Exception as exc:
+    except Exception:
         beat.status = Beat.Status.REJECTED
         beat.save(update_fields=["status"])
-        Job.objects.create(
-            project=project,
-            kind=Job.Kind.VIDEO,
-            status=Job.Status.FAILED,
-            agent_role="cinematographer",
-            backend=getattr(backend, "provider_id", ""),
-            error=str(exc),
-            result={"ingredients": pack["items"]},
-        )
         raise
     return beat
