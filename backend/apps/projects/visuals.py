@@ -1,4 +1,3 @@
-from apps.jobs.models import Job
 from apps.production.models import Asset
 from apps.projects.models import Project
 
@@ -43,12 +42,4 @@ def generate_refs(project: Project) -> list:
             artist.prop_ref(name=prop.name, look=prop.look),
             {"key": prop.key, "name": prop.name, "entity": "prop"},
         )
-    Job.objects.create(
-        project=project,
-        kind=Job.Kind.IMAGE,
-        status=Job.Status.SUCCEEDED,
-        agent_role="art_director",
-        backend=getattr(artist.image, "provider_id", ""),
-        result={"assets": len(created)},
-    )
     return created
