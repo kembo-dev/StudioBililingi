@@ -13,5 +13,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.text();
     throw new Error(`${res.status} ${body}`);
   }
-  return res.json() as Promise<T>;
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
+  const raw = await res.text();
+  return (raw ? JSON.parse(raw) : undefined) as T;
 }
