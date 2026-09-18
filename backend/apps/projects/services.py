@@ -8,7 +8,7 @@ from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import Project, Season
-from apps.story.models import Beat, Episode, Scene, Script
+from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 
 
 def _ensure_org(name: str) -> Organization:
@@ -305,14 +305,47 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     return persist_beats(episode, _beat_chunks(raw, text))
 
 
-def review_beat(beat: Beat, decision: str, comment: str = "") -> Beat:
+def review_beat(beat: Beat, decision: str, comment: str = "", take_id: int | None = None) -> Beat:
     from apps.production.models import Review
-    allowed = {"approve": Beat.Status.APPROVED_TEXT, "reject": Beat.Status.REJECTED, "revise": Beat.Status.DRAFT}
+
+    allowed = {"approve", "reject", "revise"}
     if decision not in allowed:
         raise ValueError("decision must be approve, reject or revise")
-    Review.objects.create(beat=beat, episode=beat.episode, decision=decision, comment=comment)
-    beat.status = Beat.Status.LOCKED if decision == "approve" and beat.assets.filter(role="clip").exists() else allowed[decision]
-    beat.save(update_fields=["status"])
+
+    take = None
+    if take_id is not None:
+        take = beat.takes.filter(pk=take_id).first()
+        if take is None:
+            raise ValueError("Ce take n'appartient pas à ce beat")
+    elif decision in {"approve", "reject"}:
+        take = beat.takes.order_by("-number").first()
+
+    if decision == "approve" and take is not None:
+        if not take.uri:
+            raise ValueError("Impossible de verrouiller un take sans vidéo")
+        beat.takes.exclude(pk=take.pk).filter(status=BeatTake.Status.LOCKED).update(status=BeatTake.Status.REVIEW)
+        take.status = BeatTake.Status.LOCKED
+        take.save(update_fields=["status"])
+        beat.take = take.number
+        beat.status = Beat.Status.LOCKED
+        beat.save(update_fields=["take", "status"])
+    elif decision == "reject":
+        if take is not None:
+            take.status = BeatTake.Status.REJECTED
+            take.save(update_fields=["status"])
+        beat.status = Beat.Status.REJECTED
+        beat.save(update_fields=["status"])
+    else:
+        beat.status = Beat.Status.DRAFT
+        beat.save(update_fields=["status"])
+
+    Review.objects.create(
+        beat=beat,
+        beat_take=take,
+        episode=beat.episode,
+        decision=decision,
+        comment=comment,
+    )
     return beat
 
 
