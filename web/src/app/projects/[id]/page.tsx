@@ -6,14 +6,18 @@ import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
 
+type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
+type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
   id: number;
+  scene_id?: number | null;
   index: number;
   text: string;
   word_count: number;
   status: string;
   clip_uri?: string | null;
   ingredients?: { role?: string; name?: string; uri?: string }[];
+  takes: BeatTake[];
 };
 type Episode = {
   id: number;
@@ -23,6 +27,7 @@ type Episode = {
   status: string;
   latest_script?: string;
   beats: Beat[];
+  scenes: Scene[];
 };
 type Character = { id: number; name: string; role: string; look: string };
 type Location = { id: number; name: string; look: string };
@@ -31,6 +36,7 @@ type Project = {
   id: number;
   title: string;
   concept: string;
+  delivery: string;
   refs?: Ref[];
   bibles: { id: number; version: number; locked: boolean; characters: Character[]; locations: Location[] }[];
   seasons: { id: number; episodes: Episode[] }[];
@@ -80,6 +86,7 @@ export default function ProjectPage() {
         <div>
           <h1 className="text-3xl font-semibold">{project.title}</h1>
           <p className="mt-2 text-[#9aa3b2]">{project.concept}</p>
+          <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8c36a]">Mode · {project.delivery}</p>
         </div>
         <button
           className="text-xs text-red-400"
@@ -139,6 +146,7 @@ export default function ProjectPage() {
                 <button onClick={() => run(`seg-${ep.id}`, `/api/episodes/${ep.id}/segment/`)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs">{busy === `seg-${ep.id}` ? "\u2026" : "Découper en beats"}</button>
               </div>
             </div>
+            {ep.scenes?.length ? <div className="mt-3 flex flex-wrap gap-2">{ep.scenes.map((scene) => <span key={scene.id} className="rounded-full border border-[#2a2e38] px-2 py-1 text-xs text-[#9aa3b2]">Scène {scene.index} · {scene.heading || "Sans titre"}</span>)}</div> : null}
             {ep.beats.length ? (
               <ol className="mt-3 space-y-2">
                 {ep.beats.map((beat) => (
