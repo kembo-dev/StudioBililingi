@@ -3,7 +3,7 @@ from rest_framework import serializers
 from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.projects.models import Project, Season
-from apps.story.models import Beat, Episode, Script
+from apps.story.models import Beat, BeatTake, Episode, Script
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -40,14 +40,27 @@ class WorldBibleSerializer(serializers.ModelSerializer):
         fields = ("id", "version", "payload", "locked", "created_at", "characters", "locations", "props")
 
 
+class BeatTakeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BeatTake
+        fields = ("id", "number", "prompt", "negative_prompt", "backend", "uri", "status", "generation_meta", "created_at")
+
+
 class BeatSerializer(serializers.ModelSerializer):
     clip_uri = serializers.SerializerMethodField()
+    takes = BeatTakeSerializer(many=True, read_only=True)
+    character_ids = serializers.PrimaryKeyRelatedField(source="characters", many=True, read_only=True)
+    prop_ids = serializers.PrimaryKeyRelatedField(source="props", many=True, read_only=True)
 
     class Meta:
         model = Beat
-        fields = ("id", "index", "take", "text", "word_count", "duration_seconds", "emotion", "dialogue", "video_prompt", "backend", "status", "camera", "clip_uri")
+        fields = ("id", "scene_id", "script_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes")
 
     def get_clip_uri(self, obj):
+        locked = obj.takes.filter(status=BeatTake.Status.LOCKED).order_by("-number").first()
+        latest = locked or obj.takes.filter(uri__gt="").order_by("-number").first()
+        if latest:
+            return latest.uri
         clip = obj.assets.filter(role="clip").order_by("-id").first()
         return clip.uri if clip else None
 
