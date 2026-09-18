@@ -109,7 +109,7 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
 
         beat = self.get_object()
         try:
-            recontextualize_beat(beat, request.data.get("prompt") or request.data.get("instruction") or "")
+            recontextualize_beat(beat, request.data.get("prompt") or request.data.get("instruction") or "", form=beat.episode.season.project.delivery)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         beat = self.get_queryset().get(pk=beat.pk)
