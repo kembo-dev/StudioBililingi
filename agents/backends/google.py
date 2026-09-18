@@ -28,6 +28,7 @@ def _parse_json(text: str) -> dict:
 
 
 def _client():
+    """Create a process-local GenAI client safe for Celery prefork workers."""
     from google import genai
 
     use_vertex = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {"1", "true", "yes"}
@@ -37,7 +38,8 @@ def _client():
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
             location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
         )
-    return genai.Client()
+    api_key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
+    return genai.Client(api_key=api_key or None)
 
 
 def _media_root() -> Path:
