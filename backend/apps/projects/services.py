@@ -278,6 +278,30 @@ def lock_bible(project: Project) -> WorldBible:
     return bible
 
 
+def _canonical_continuity(episode: Episode) -> list[dict]:
+    """Build continuity only from earlier canonical episode versions."""
+    rows = []
+    previous = episode.season.episodes.filter(number__lt=episode.number).order_by("number")
+    for item in previous:
+        script = item.scripts.order_by("-version").first()
+        if script is None:
+            continue
+        scenes = list(
+            script.scenes.order_by("index").values("index", "heading", "summary", "time_of_day")
+        )
+        beats = list(
+            script.beats.order_by("index").values_list("text", flat=True)
+        )
+        rows.append({
+            "episode": item.number,
+            "title": item.title,
+            "logline": item.logline,
+            "scenes": scenes,
+            "established_events": beats,
+        })
+    return rows
+
+
 def write_script(episode: Episode) -> Script:
     project = episode.season.project
     bible = project.bibles.first()
@@ -289,6 +313,7 @@ def write_script(episode: Episode) -> Script:
             concept=project.concept, bible=bible.payload,
             episode={"number": episode.number, "title": episode.title, "logline": episode.logline},
             form=project.delivery,
+            continuity=_canonical_continuity(episode),
         )
     except Exception:
         raw = {}
