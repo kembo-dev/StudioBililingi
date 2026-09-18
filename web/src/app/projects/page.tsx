@@ -11,6 +11,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [title, setTitle] = useState("");
   const [concept, setConcept] = useState("");
+  const [delivery, setDelivery] = useState("storytell");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -29,7 +30,7 @@ export default function ProjectsPage() {
     try {
       const project = await api<Project>("/api/projects/", {
         method: "POST",
-        body: JSON.stringify({ title, concept }),
+        body: JSON.stringify({ title, concept, delivery }),
       });
       window.location.href = `/projects/${project.id}`;
     } catch (err) {
@@ -46,9 +47,32 @@ export default function ProjectsPage() {
       </p>
       <h1 className="text-3xl font-semibold">Projets</h1>
       <form onSubmit={onSubmit} className="space-y-3 rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
-        <input className="w-full rounded-lg bg-[#0b0c10] px-3 py-2 text-sm outline-none" placeholder="Titre de la série" value={title} onChange={(e) => setTitle(e.target.value)} required />
-        <textarea className="min-h-28 w-full rounded-lg bg-[#0b0c10] px-3 py-2 text-sm outline-none" placeholder="Concept : histoire, début, fin voulue" value={concept} onChange={(e) => setConcept(e.target.value)} required />
-        <button disabled={busy} className="rounded-lg bg-[#e8c36a] px-4 py-2 text-sm font-medium text-[#0b0c10] disabled:opacity-50">{busy ? "Création…" : "Créer + bible + saison"}</button>
+        <label className="block text-xs text-[#9aa3b2]">
+          Titre
+          <input className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white outline-none" placeholder="L’Appel de 03h14" value={title} onChange={(e) => setTitle(e.target.value)} required />
+        </label>
+        <label className="block text-xs text-[#9aa3b2]">
+          Concept
+          <textarea className="mt-1 min-h-28 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white outline-none" placeholder="Genre / Concept / Début / Fin" value={concept} onChange={(e) => setConcept(e.target.value)} required />
+        </label>
+        <div>
+          <p className="mb-2 text-sm font-medium text-[#e8c36a]">Type de rendu</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ["storytell", "Storytell"],
+              ["voix_off", "Voix off"],
+              ["conversation", "Conversation"],
+              ["rencontre", "Rencontre"],
+            ].map(([value, label]) => (
+              <button key={value} type="button" onClick={() => setDelivery(value)} className={delivery === value ? "rounded-lg bg-[#e8c36a] px-3 py-2 text-sm font-medium text-[#0b0c10]" : "rounded-lg border border-[#2a2e38] px-3 py-2 text-sm text-[#9aa3b2]"}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button disabled={busy} className="rounded-lg bg-[#e8c36a] px-4 py-2 text-sm font-medium text-[#0b0c10] disabled:opacity-50">
+          {busy ? "Création…" : "Créer + bible + saison"}
+        </button>
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
       </form>
       <ul className="space-y-2">
@@ -58,22 +82,16 @@ export default function ProjectsPage() {
               <p className="font-medium">{project.title}</p>
               <p className="text-sm text-[#9aa3b2]">{project.concept}</p>
             </Link>
-            <button
-              type="button"
-              className="shrink-0 text-xs text-red-400"
-              onClick={async (event) => {
-                event.preventDefault();
-                if (!window.confirm(`Supprimer \u00ab ${project.title} \u00bb ?`)) return;
-                try {
-                  await api(`/api/projects/${project.id}/`, { method: "DELETE" });
-                  await load();
-                } catch (err) {
-                  setError(String(err));
-                }
-              }}
-            >
-              Supprimer
-            </button>
+            <button type="button" className="shrink-0 text-xs text-red-400" onClick={async (event) => {
+              event.preventDefault();
+              if (!window.confirm(`Supprimer \u00ab ${project.title} \u00bb ?`)) return;
+              try {
+                await api(`/api/projects/${project.id}/`, { method: "DELETE" });
+                await load();
+              } catch (err) {
+                setError(String(err));
+              }
+            }}>Supprimer</button>
           </li>
         ))}
       </ul>
