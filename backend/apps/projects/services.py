@@ -8,7 +8,7 @@ from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import Project, Season
-from apps.story.models import Beat, Episode, Script
+from apps.story.models import Beat, Episode, Scene, Script
 
 
 def _ensure_org(name: str) -> Organization:
@@ -103,20 +103,107 @@ def segment_text(text: str, target: int = 24) -> list[str]:
     return [" ".join(words[i:i + target]) for i in range(0, len(words), target)] if words else []
 
 
-def persist_beats(episode: Episode, chunks: list[str]) -> list[Beat]:
-    script = Script.objects.create(episode=episode, version=episode.scripts.count() + 1, fountain="\n".join(chunks), payload={"beats": chunks})
-    episode.beats.all().delete()
+def _entity_keys(value) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    keys = []
+    for item in value:
+        if isinstance(item, dict):
+            key = item.get("id") or item.get("key") or item.get("name")
+        else:
+            key = item
+        if key:
+            keys.append(str(key))
+    return keys
+
+
+def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
+    """Persist a new immutable segmentation version.
+
+    Previous scripts/beats are preserved. Structured segmenter metadata is
+    resolved against the locked project bible instead of being discarded.
+    """
+    project = episode.season.project
+    rows = [{"text": row} if isinstance(row, str) else dict(row) for row in chunks]
+    script = Script.objects.create(
+        episode=episode,
+        version=episode.scripts.count() + 1,
+        fountain="\n".join(str(row.get("text") or "") for row in rows),
+        payload={"beats": rows},
+    )
     created = []
-    location = episode.season.project.locations.first()
-    for index, chunk in enumerate(chunks):
-        created.append(Beat.objects.create(
-            episode=episode, script=script, index=index, text=chunk,
-            word_count=len(_words(chunk)), duration_seconds=8, location=location,
-            video_prompt=chunk, backend="google-veo-3.1", status=Beat.Status.DRAFT,
-        ))
+    scenes: dict[int, Scene] = {}
+
+    for index, row in enumerate(rows):
+        text = str(row.get("text") or "").strip()
+        if not text:
+            continue
+        scene_index = int(row.get("scene_index") or row.get("scene") or 1)
+        scene = scenes.get(scene_index)
+        if scene is None:
+            scene = Scene.objects.create(
+                episode=episode,
+                script=script,
+                index=scene_index,
+                heading=str(row.get("scene_heading") or row.get("heading") or ""),
+                summary=str(row.get("scene_summary") or ""),
+                time_of_day=str(row.get("time_of_day") or ""),
+                lighting=str(row.get("lighting") or ""),
+                continuity_state=row.get("continuity") if isinstance(row.get("continuity"), dict) else {},
+            )
+            scenes[scene_index] = scene
+
+        loc_key = row.get("location_id") or row.get("location")
+        if isinstance(loc_key, dict):
+            loc_key = loc_key.get("id") or loc_key.get("key") or loc_key.get("name")
+        location = project.locations.filter(key=loc_key).first() if loc_key else None
+        if location is None and loc_key:
+            location = project.locations.filter(name__iexact=str(loc_key)).first()
+        if location and scene.location_id is None:
+            scene.location = location
+            scene.save(update_fields=["location"])
+
+        beat = Beat.objects.create(
+            episode=episode,
+            script=script,
+            scene=scene,
+            index=index,
+            text=text,
+            word_count=len(_words(text)),
+            duration_seconds=row.get("duration_seconds") or 8,
+            location=location,
+            camera=row.get("camera") if isinstance(row.get("camera"), dict) else {},
+            continuity=row.get("continuity") if isinstance(row.get("continuity"), dict) else {},
+            emotion=str(row.get("emotion") or ""),
+            dialogue=str(row.get("dialogue") or ""),
+            video_prompt=str(row.get("video_prompt") or text),
+            negative_prompt=str(row.get("negative_prompt") or ""),
+            backend=str(row.get("backend") or "google-veo-3.1"),
+            status=Beat.Status.DRAFT,
+        )
+
+        char_keys = _entity_keys(row.get("character_ids") or row.get("characters"))
+        prop_keys = _entity_keys(row.get("prop_ids") or row.get("props"))
+        characters = list(project.characters.filter(key__in=char_keys))
+        props = list(project.props.filter(key__in=prop_keys))
+        beat.characters.set(characters)
+        beat.props.set(props)
+        scene.characters.add(*characters)
+        scene.props.add(*props)
+        created.append(beat)
+
     episode.status = Episode.Status.SEGMENTED
     episode.save(update_fields=["status"])
-    Job.objects.create(project=episode.season.project, kind=Job.Kind.SEGMENT, status=Job.Status.SUCCEEDED, agent_role="beat_segmenter", backend="stub-text", result={"episode_id": episode.id, "beats": len(created)})
+    Job.objects.create(
+        project=project,
+        kind=Job.Kind.SEGMENT,
+        status=Job.Status.SUCCEEDED,
+        agent_role="beat_segmenter",
+        backend="stub-text",
+        result={"episode_id": episode.id, "script_id": script.id, "beats": len(created)},
+    )
     return created
 
 
@@ -191,14 +278,20 @@ def write_script(episode: Episode) -> Script:
     return script
 
 
-def _beat_chunks(raw, fallback_text: str) -> list[str]:
+def _beat_chunks(raw, fallback_text: str) -> list:
     items = raw if isinstance(raw, list) else (raw.get("beats") if isinstance(raw, dict) else None)
     chunks = []
     for item in items or []:
-        text = item.get("text") if isinstance(item, dict) else str(item)
-        if text and str(text).strip():
-            chunks.append(str(text).strip())
-    return chunks or segment_text(fallback_text)
+        if isinstance(item, dict):
+            row = dict(item)
+            if str(row.get("text") or "").strip():
+                row["text"] = str(row["text"]).strip()
+                chunks.append(row)
+        else:
+            text = str(item).strip()
+            if text:
+                chunks.append({"text": text})
+    return chunks or [{"text": text} for text in segment_text(fallback_text)]
 
 
 def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
