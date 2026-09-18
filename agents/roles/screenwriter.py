@@ -9,13 +9,17 @@ class Screenwriter:
     def __init__(self):
         self.text = get_text()
 
-    def write(self, *, concept: str, bible: dict, episode: dict) -> dict:
+    def write(self, *, concept: str, bible: dict, episode: dict, form: str = "storytell") -> dict:
+        shapes = {
+            "conversation": "FORME CONVERSATION : fountain = répliques NOM : texte seulement.",
+            "voix_off": "FORME VOIX OFF : VOIX OFF : « … » puis l'image.",
+            "rencontre": "FORME RENCONTRE : deux présences, geste, réplique.",
+            "storytell": "FORME STORYTELL : narration 3e personne.",
+        }
         return self.text.generate_json(
             system=(
-                "Tu écris le script d'un épisode de série courte. JSON uniquement : "
-                '{"fountain": str, "scenes": [{"heading": str, "action": str, "dialogue": [str]}]}. '
-                "Respecte STRICTEMENT les personnages, lieux et objets de la bible. "
-                "Pas de nouveaux personnages. Texte en français, visuel, jouable."
+                "Tu écris UN épisode. JSON : {\"fountain\": str, \"scenes\": []}. "
+                f"{shapes.get(form, shapes['storytell'])} Respecte la bible. Français."
             ),
-            user=f"CONCEPT:\n{concept}\n\nBIBLE:\n{bible}\n\nEPISODE:\n{episode}",
+            user=f"FORME:{form}\nCONCEPT:\n{concept}\n\nBIBLE:\n{bible}\n\nEPISODE:\n{episode}",
         )
