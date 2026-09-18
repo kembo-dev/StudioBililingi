@@ -2,7 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.projects.models import Project
-from apps.story.models import Beat, Episode
+from apps.story.models import Beat, BeatTake, Episode
 
 
 class Asset(models.Model):
@@ -21,11 +21,13 @@ class Asset(models.Model):
         CLIP = "clip"
         SCORE = "score"
         VOICE = "voice"
+        EPISODE_CUT = "episode_cut"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="assets")
     beat = models.ForeignKey(
         Beat, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets"
     )
+    beat_take = models.ForeignKey(BeatTake, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
     kind = models.CharField(max_length=16, choices=Kind.choices)
     role = models.CharField(max_length=32, choices=Role.choices)
     uri = models.CharField(max_length=1024)
@@ -46,6 +48,7 @@ class Review(models.Model):
     beat = models.ForeignKey(
         Beat, on_delete=models.CASCADE, null=True, blank=True, related_name="reviews"
     )
+    beat_take = models.ForeignKey(BeatTake, on_delete=models.CASCADE, null=True, blank=True, related_name="reviews")
     reviewer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )
