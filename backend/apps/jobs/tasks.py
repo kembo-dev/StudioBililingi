@@ -22,6 +22,13 @@ def run_studio_job(job_id: int) -> dict:
             project = Project.objects.get(pk=job.project_id)
             refs = generate_refs(project)
             job.result = {"assets": len(refs)}
+        elif job.kind == Job.Kind.ASSEMBLY:
+            from apps.projects.assembly import assemble_episode
+            from apps.story.models import Episode
+
+            episode = Episode.objects.get(pk=payload["episode_id"])
+            asset = assemble_episode(episode)
+            job.result = {"episode_id": episode.id, "asset_id": asset.id, "uri": asset.uri}
         else:
             raise ValueError(f"unsupported job kind: {job.kind}")
         job.status = Job.Status.SUCCEEDED
