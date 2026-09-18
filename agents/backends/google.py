@@ -127,7 +127,7 @@ class GoogleVideoBackend:
     ) -> str:
         from google.genai import types
 
-        model = os.getenv("VEO_MODEL", "veo-3.1-generate-preview")
+        model = os.getenv("VEO_MODEL", "veo-3.1-generate-001")
         usable = [uri for uri in (ingredients or []) if _usable(uri)]
         text = prompt
         if _usable(start_frame):
