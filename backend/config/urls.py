@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from apps.jobs.views import JobViewSet
 from apps.projects.views import BeatViewSet, EpisodeViewSet, ProjectViewSet
 
 
@@ -16,6 +17,7 @@ router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
 router.register("episodes", EpisodeViewSet, basename="episode")
 router.register("beats", BeatViewSet, basename="beat")
+router.register("jobs", JobViewSet, basename="job")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
