@@ -91,15 +91,25 @@ class GoogleImageBackend:
     provider_id = "google-nano-banana"
 
     def generate(self, prompt: str, refs: list[str] | None = None) -> str:
+        from google.genai import types
+
         model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
         client = _client()
         try:
-            response = client.models.generate_content(model=model, contents=prompt)
-        finally:
-            client.close()
-        for candidate in getattr(response, "candidates", None) or []:
-            content = getattr(candidate, "content", None)
-            for part in getattr(content, "parts", None) or []:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE"],
+                ),
+            )
+            parts = list(getattr(response, "parts", None) or [])
+            if not parts:
+                for candidate in getattr(response, "candidates", None) or []:
+                    content = getattr(candidate, "content", None)
+                    parts.extend(getattr(content, "parts", None) or [])
+
+            for part in parts:
                 inline = getattr(part, "inline_data", None) or getattr(part, "inlineData", None)
                 data = getattr(inline, "data", None) if inline else None
                 mime = getattr(inline, "mime_type", None) or getattr(inline, "mimeType", None) or "image/png"
@@ -109,7 +119,14 @@ class GoogleImageBackend:
                         data = base64.b64decode(data)
                     suffix = ".jpg" if "jpeg" in mime else ".png"
                     return _save_bytes("refs", data, suffix)
-        raise RuntimeError(f"Gemini Image returned no bytes ({model})")
+
+            text = getattr(response, "text", "") or ""
+            raise RuntimeError(
+                f"Gemini Image returned no image bytes ({model}). "
+                f"Response text: {text[:200]!r}"
+            )
+        finally:
+            client.close()
 
 
 class GoogleVideoBackend:
