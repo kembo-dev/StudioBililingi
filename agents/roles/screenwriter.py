@@ -9,7 +9,15 @@ class Screenwriter:
     def __init__(self):
         self.text = get_text()
 
-    def write(self, *, concept: str, bible: dict, episode: dict, form: str = "storytell") -> dict:
+    def write(
+        self,
+        *,
+        concept: str,
+        bible: dict,
+        episode: dict,
+        form: str = "storytell",
+        continuity: list[dict] | None = None,
+    ) -> dict:
         shapes = {
             "conversation": (
                 "MODE CONVERSATION. Le scénario est porté par de vraies répliques entre les personnages. "
@@ -33,12 +41,16 @@ class Screenwriter:
                 "Tu es le scénariste de StudioBililingi. Écris UN épisode exploitable en production vidéo. "
                 "Réponds en JSON avec exactement les clés fountain et scenes. fountain contient le scénario complet. "
                 "scenes est une liste d'objets avec index, heading, summary, location_id, time_of_day et character_ids. "
-                f"{shape} Respecte strictement la bible, le ton, les noms, lieux et objets établis. Français naturel."
+                f"{shape} Respecte strictement la bible, le ton, les noms, lieux et objets établis. "
+                "La continuité canonique des épisodes précédents est une contrainte: ne renomme pas un lieu, "
+                "ne répète pas un événement déjà accompli et ne prétends pas qu'une action passée a eu lieu si elle "
+                "n'apparaît pas dans cette continuité. Français naturel."
             ),
             user=(
                 f"MODE DE LIVRAISON: {form}\n\n"
                 f"CONCEPT:\n{concept}\n\n"
                 f"BIBLE:\n{bible}\n\n"
+                f"CONTINUITE CANONIQUE DES EPISODES PRECEDENTS:\n{continuity or []}\n\n"
                 f"EPISODE:\n{episode}"
             ),
         )
