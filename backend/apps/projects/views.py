@@ -17,7 +17,7 @@ from apps.story.models import Beat, Episode
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "delete", "head", "options"]
     queryset = Project.objects.prefetch_related(
         "seasons__episodes__beats__assets",
         "bibles__characters",
