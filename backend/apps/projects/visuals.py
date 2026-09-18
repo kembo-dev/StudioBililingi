@@ -12,6 +12,13 @@ def generate_refs(project: Project) -> list:
     artist = ArtDirector()
     created = []
 
+    def existing(role: str, key: str):
+        return (
+            Asset.objects.filter(project=project, role=role, meta__key=key)
+            .order_by("-created_at")
+            .first()
+        )
+
     def save(role: str, uri: str, meta: dict) -> None:
         created.append(
             Asset.objects.create(
@@ -25,18 +32,24 @@ def generate_refs(project: Project) -> list:
         )
 
     for char in project.characters.all():
+        if existing(Asset.Role.CHARACTER_REF, char.key):
+            continue
         save(
             Asset.Role.CHARACTER_REF,
             artist.character_ref(name=char.name, look=char.look, role=char.role),
             {"key": char.key, "name": char.name, "entity": "character"},
         )
     for loc in project.locations.all():
+        if existing(Asset.Role.LOCATION_REF, loc.key):
+            continue
         save(
             Asset.Role.LOCATION_REF,
             artist.location_ref(name=loc.name, look=loc.look, time_of_day=loc.time_of_day),
             {"key": loc.key, "name": loc.name, "entity": "location"},
         )
     for prop in project.props.all():
+        if existing(Asset.Role.PROP_REF, prop.key):
+            continue
         save(
             Asset.Role.PROP_REF,
             artist.prop_ref(name=prop.name, look=prop.look),
