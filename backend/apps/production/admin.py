@@ -10,4 +10,4 @@ class AssetAdmin(admin.ModelAdmin):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ("decision", "episode", "beat", "created_at")
+    list_display = ("decision", "episode", "beat", "beat_take", "created_at")
