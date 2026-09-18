@@ -79,6 +79,7 @@ def render_beat(beat: Beat) -> Beat:
         Asset.objects.create(
             project=project,
             beat=beat,
+            beat_take=take,
             kind=Asset.Kind.VIDEO,
             role=Asset.Role.CLIP,
             uri=uri,
