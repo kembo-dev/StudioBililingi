@@ -80,7 +80,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "status", "created_at", "seasons", "bibles", "refs")
+        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "delivery", "status", "created_at", "seasons", "bibles", "refs")
         read_only_fields = ("slug", "status", "created_at")
 
     def get_refs(self, obj):
@@ -98,4 +98,5 @@ class ProjectCreateSerializer(serializers.Serializer):
     genre = serializers.CharField(required=False, allow_blank=True, default="")
     tone = serializers.CharField(required=False, allow_blank=True, default="")
     ending_intent = serializers.CharField(required=False, allow_blank=True, default="")
+    delivery = serializers.ChoiceField(choices=("storytell", "voix_off", "conversation", "rencontre"), required=False, default="storytell")
     organization_name = serializers.CharField(required=False, default="Studio")
