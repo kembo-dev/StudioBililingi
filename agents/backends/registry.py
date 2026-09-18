@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+_REPO_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(_REPO_DIR / ".env")
+load_dotenv(_REPO_DIR / "backend" / ".env")
 
 from .google import GoogleAudioBackend, GoogleImageBackend, GoogleTextBackend, GoogleVideoBackend
 from .stub import StubAudioBackend, StubImageBackend, StubTextBackend, StubVideoBackend
