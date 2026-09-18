@@ -2,7 +2,6 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.projects.continuity import render_beat
 from apps.projects.models import Project
 from apps.projects.serializers import BeatSerializer, EpisodeSerializer, ProjectCreateSerializer, ProjectSerializer
 from apps.projects.services import (
@@ -14,7 +13,6 @@ from apps.projects.services import (
     run_showrunner,
     write_script,
 )
-from apps.projects.visuals import generate_refs
 from apps.story.models import Beat, Episode
 
 
@@ -64,11 +62,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="generate-refs")
     def generate_refs_action(self, request, pk=None):
+        from apps.jobs.models import Job
+        from apps.jobs.queue import enqueue, is_eager
+
         project = self.get_object()
-        try:
-            generate_refs(project)
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        bible = project.bibles.first()
+        if bible is None or not bible.locked:
+            return Response({"detail": "Verrouille la bible avant les références visuelles"}, status=status.HTTP_400_BAD_REQUEST)
+        job = enqueue(project=project, kind=Job.Kind.IMAGE, agent_role="art_director", payload={"project_id": project.id})
+        if is_eager() and job.status == Job.Status.FAILED:
+            return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data)
 
@@ -114,7 +117,19 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def render(self, request, pk=None):
+        from apps.jobs.models import Job
+        from apps.jobs.queue import enqueue, is_eager
+
         beat = self.get_object()
-        render_beat(beat)
+        beat.status = beat.Status.RENDERING
+        beat.save(update_fields=["status"])
+        job = enqueue(
+            project=beat.episode.season.project,
+            kind=Job.Kind.VIDEO,
+            agent_role="cinematographer",
+            payload={"beat_id": beat.id},
+        )
+        if is_eager() and job.status == Job.Status.FAILED:
+            return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
         beat = self.get_queryset().get(pk=beat.pk)
         return Response(BeatSerializer(beat).data)
