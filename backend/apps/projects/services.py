@@ -95,7 +95,27 @@ def persist_episodes(project: Project, plan: list[dict]) -> list[Episode]:
 
 
 def seed_script(episode: Episode) -> str:
-    return f"{episode.title}. {episode.logline} Awa serre le carnet. Un pas derrière elle. Malo apparaît sous le lampadaire. Elle refuse le marché. L'eau claque contre le quai. Quelqu'un récupère le carnet."
+    """Last-resort script that still respects the project's delivery mode."""
+    project = episode.season.project
+    title = episode.title
+    logline = episode.logline
+    if project.delivery == "conversation":
+        return (
+            f"INT./EXT. - SCENE DE {title.upper()} - JOUR/NUIT\n"
+            f"PROTAGONISTE : {logline}\n"
+            "AUTRE : Qu'est-ce que tu vas faire maintenant ?\n"
+            "PROTAGONISTE : Je vais vérifier par moi-même."
+        )
+    if project.delivery == "voix_off":
+        return f"VOIX OFF : {logline}\nIMAGE : Une action visuelle concrète révèle l'enjeu de {title}."
+    if project.delivery == "rencontre":
+        return (
+            f"SCENE - {title}\n"
+            "Les deux personnages se font face. Un silence.\n"
+            f"PROTAGONISTE : {logline}\n"
+            "AUTRE : Alors montre-moi."
+        )
+    return f"{title}. {logline}"
 
 
 def segment_text(text: str, target: int = 24) -> list[str]:
@@ -140,7 +160,11 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
         text = str(row.get("text") or "").strip()
         if not text:
             continue
-        scene_index = int(row.get("scene_index") or row.get("scene") or 1)
+        raw_scene_index = row.get("scene_index") or 1
+        try:
+            scene_index = int(raw_scene_index)
+        except (TypeError, ValueError):
+            scene_index = 1
         scene = scenes.get(scene_index)
         if scene is None:
             scene = Scene.objects.create(
@@ -299,7 +323,7 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     text = script_text or (latest.fountain if latest else None) or seed_script(episode)
     try:
         from agents.roles.segmenter import BeatSegmenter
-        raw = BeatSegmenter().segment(text)
+        raw = BeatSegmenter().segment(text, form=episode.season.project.delivery, bible=(episode.season.project.bibles.first().payload if episode.season.project.bibles.first() else {}))
     except Exception:
         raw = None
     return persist_beats(episode, _beat_chunks(raw, text))
