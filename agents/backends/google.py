@@ -68,15 +68,19 @@ class GoogleTextBackend:
         from google.genai import types
 
         model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-        response = _client().models.generate_content(
-            model=model,
-            contents=user,
-            config=types.GenerateContentConfig(
-                system_instruction=system,
-                response_mime_type="application/json",
-                temperature=0.7,
-            ),
-        )
+        client = _client()
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=user,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    response_mime_type="application/json",
+                    temperature=0.7,
+                ),
+            )
+        finally:
+            client.close()
         payload = _parse_json(response.text or "")
         payload["_provider"] = self.provider_id
         payload["_model"] = model
@@ -88,7 +92,11 @@ class GoogleImageBackend:
 
     def generate(self, prompt: str, refs: list[str] | None = None) -> str:
         model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
-        response = _client().models.generate_content(model=model, contents=prompt)
+        client = _client()
+        try:
+            response = client.models.generate_content(model=model, contents=prompt)
+        finally:
+            client.close()
         for candidate in getattr(response, "candidates", None) or []:
             content = getattr(candidate, "content", None)
             for part in getattr(content, "parts", None) or []:
