@@ -33,7 +33,9 @@ class StubVideoBackend:
         duration_seconds: float = 8,
         aspect_ratio: str = "16:9",
     ) -> str:
-        return f"stub://video/{abs(hash(prompt))}"
+        refs = ingredients or []
+        token = abs(hash((prompt, start_frame or "", tuple(refs))))
+        return f"stub://video/{token}?refs={len(refs)}"
 
 
 class StubAudioBackend:
