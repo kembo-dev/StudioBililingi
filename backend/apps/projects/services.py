@@ -248,7 +248,10 @@ def run_showrunner(project: Project) -> dict:
     except Exception as exc:
         raw = {"_error": str(exc)}
     if raw.get("tone") and not project.tone:
-        project.tone = raw["tone"]
+        # LLMs may return a descriptive paragraph while Project.tone is a
+        # compact CharField. Never let generated prose overflow the database.
+        tone_field = Project._meta.get_field("tone")
+        project.tone = str(raw["tone"]).strip()[: tone_field.max_length]
         project.save(update_fields=["tone"])
     rows = _episode_rows(raw, project.concept)
     if raw.get("_error"):
