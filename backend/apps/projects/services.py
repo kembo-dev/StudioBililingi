@@ -471,8 +471,20 @@ def _beat_chunks(raw, fallback_text: str) -> list:
     return chunks or [{"text": text} for text in segment_text(fallback_text)]
 
 
-def _speaker_names(row: dict, project: Project) -> list[str]:
-    return CharacterResolver(project).names_for_row(row)
+def _speaker_names(row: dict, project: Project, resolver: CharacterResolver | None = None) -> list[str]:
+    return (resolver or CharacterResolver(project)).names_for_row(row)
+
+
+def _canonical_speaker_from_dialogue(value: str, resolver: CharacterResolver) -> str:
+    """Resolve a speaker from any NAME: prefix, including normal title case."""
+    for line in str(value or "").splitlines():
+        match = re.match(r"^\s*([^:\n]{1,80})\s*:\s*\S", line)
+        if not match:
+            continue
+        resolved = resolver.resolve(match.group(1).strip())
+        if resolved:
+            return resolved.name
+    return ""
 
 
 def _extract_speaker_label(value: str) -> str:
@@ -505,6 +517,7 @@ def _normalize_conversation_beats(chunks: list, *, project: Project) -> list:
 
 def _segmentation_errors(chunks: list, *, form: str, project: Project) -> list[str]:
     errors = []
+    resolver = CharacterResolver(project)
     for i, row in enumerate(chunks, start=1):
         text = str(row.get("text") or "").strip()
         count = len(_words(text))
@@ -514,10 +527,13 @@ def _segmentation_errors(chunks: list, *, form: str, project: Project) -> list[s
             dialogue = str(row.get("dialogue") or "").strip()
             text_value = str(row.get("text") or "").strip()
             if dialogue:
-                has_speaker = bool(_extract_speaker_label(dialogue) or _extract_speaker_label(text_value))
-                if not has_speaker:
-                    names = _speaker_names(row, project)
-                    if len(names) != 1:
+                explicit = (
+                    _canonical_speaker_from_dialogue(dialogue, resolver)
+                    or _canonical_speaker_from_dialogue(text_value, resolver)
+                )
+                if not explicit:
+                    names = _speaker_names(row, project, resolver)
+                    if not names:
                         errors.append(f"beat {i}: dialogue sans locuteur identifiable")
     return errors
 
@@ -549,10 +565,11 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     chunks = _beat_chunks(raw, "")
     if not chunks:
         raise RuntimeError("Le segmenter n'a retourné aucun beat exploitable")
+    resolver = CharacterResolver(project)
     chunks = normalize_beats(
         chunks,
         form=project.delivery,
-        resolve_character_names=lambda row: _speaker_names(row, project),
+        resolve_character_names=resolver.names_for_row,
     )
 
     errors = _segmentation_errors(chunks, form=project.delivery, project=project)
@@ -571,7 +588,7 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
         chunks = normalize_beats(
             chunks,
             form=project.delivery,
-            resolve_character_names=lambda row: _speaker_names(row, project),
+            resolve_character_names=resolver.names_for_row,
         )
 
     _validate_segmented_beats(chunks, form=project.delivery, project=project)
