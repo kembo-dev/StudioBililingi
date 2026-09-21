@@ -288,18 +288,60 @@ def run_showrunner(project: Project) -> dict:
     return {"agent": raw, "episodes": [e.id for e in episodes]}
 
 
+def _usable_bible(raw) -> bool:
+    return (
+        isinstance(raw, dict)
+        and isinstance(raw.get("characters"), list)
+        and any(isinstance(item, dict) and str(item.get("name") or "").strip() for item in raw["characters"])
+    )
+
+
 def run_bible(project: Project) -> WorldBible:
-    try:
-        from agents.roles.bible import WorldBibleAgent
-        raw = WorldBibleAgent().draft(project.concept, delivery=project.delivery)
-    except Exception as exc:
-        raise RuntimeError(f"La génération de la bible a échoué: {exc}") from exc
-    if not isinstance(raw, dict) or not raw.get("characters"):
-        raise RuntimeError("La génération de la bible n'a retourné aucun personnage exploitable")
+    from agents.roles.bible import WorldBibleAgent
+
+    agent = WorldBibleAgent()
+    last_error = ""
+    raw = None
+    for attempt in range(2):
+        try:
+            raw = agent.draft(project.concept, delivery=project.delivery)
+        except Exception as exc:
+            last_error = str(exc)
+            if attempt == 0:
+                continue
+            raise RuntimeError(f"La génération de la bible a échoué: {exc}") from exc
+        if _usable_bible(raw):
+            break
+        last_error = (
+            "réponse structurée invalide: characters doit être un tableau non vide "
+            "d'objets contenant chacun un name"
+        )
+    if not _usable_bible(raw):
+        raise RuntimeError(
+            "La génération de la bible n'a retourné aucun personnage exploitable après correction automatique: "
+            + last_error
+        )
+
     payload = normalize_story_bible(raw, delivery=project.delivery)
     errors = bible_errors(payload, delivery=project.delivery)
     if errors:
-        raise RuntimeError("Bible refusée: " + "; ".join(errors))
+        # One semantic repair attempt: regenerate from the source concept rather
+        # than persisting a malformed/generic bible.
+        try:
+            repaired = agent.draft(
+                project.concept
+                + "\n\nCONTRAINTES DE CORRECTION OBLIGATOIRES: "
+                + "; ".join(errors),
+                delivery=project.delivery,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"La correction automatique de la bible a échoué: {exc}") from exc
+        if _usable_bible(repaired):
+            payload = normalize_story_bible(repaired, delivery=project.delivery)
+            errors = bible_errors(payload, delivery=project.delivery)
+        if errors:
+            raise RuntimeError("Bible refusée après correction automatique: " + "; ".join(errors))
+
     payload.setdefault("project_id", str(project.id))
     payload["locked"] = False
     return persist_bible(project, payload)
