@@ -8,7 +8,7 @@ from apps.accounts.models import Organization
 from apps.production.models import Review
 from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
-from apps.projects.services import persist_beats, review_beat
+from apps.projects.services import persist_beats, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
 
 
@@ -118,3 +118,20 @@ class ProductionPipelineTests(TestCase):
             self.assertEqual(manifest[0], "ffmpeg")
             self.assertEqual(asset.role, "episode_cut")
             self.assertEqual([row["beat_id"] for row in asset.meta["takes"]], [b.id for b in beats])
+
+    def test_showrunner_episode_compact_fields_are_bounded(self):
+        episodes = persist_episodes(self.project, [{
+            "number": 2,
+            "title": "T" * 260,
+            "logline": "Une logline longue reste autorisee car le champ est TextField.",
+            "function_in_arc": "F" * 350,
+        }])
+
+        episode = episodes[0]
+        self.assertEqual(len(episode.title), 200)
+        self.assertEqual(len(episode.function_in_arc), 200)
+        self.assertEqual(
+            episode.logline,
+            "Une logline longue reste autorisee car le champ est TextField.",
+        )
+
