@@ -63,35 +63,65 @@ def seed_season_plan(concept: str) -> list[dict]:
     ]
 
 
-def persist_bible(project: Project, payload: dict) -> WorldBible:
-    payload = normalize_bible_payload(payload)
-    version = (project.bibles.first().version + 1) if project.bibles.exists() else 1
-    bible = WorldBible.objects.create(project=project, version=version, payload=payload, locked=False)
-    for item in payload.get("characters", []):
-        Character.objects.update_or_create(
-            project=project, key=item.get("id") or slugify(item.get("name", "perso")),
-            defaults={"bible": bible, "name": item.get("name", "Sans nom"), "role": item.get("role", ""), "want": item.get("want", ""), "need": item.get("need", ""), "look": item.get("look", ""), "voice": item.get("voice", ""), "locked": False},
-        )
-    for item in payload.get("locations", []):
-        Location.objects.update_or_create(
-            project=project, key=item.get("id") or slugify(item.get("name", "lieu")),
-            defaults={"bible": bible, "name": item.get("name", "Lieu"), "look": item.get("look", ""), "time_of_day": item.get("time_of_day", ""), "locked": False},
-        )
-    for item in payload.get("props", []):
-        Prop.objects.update_or_create(
-            project=project, key=item.get("id") or slugify(item.get("name", "objet")),
-            defaults={"bible": bible, "name": item.get("name", "Objet"), "look": item.get("look", ""), "story_function": item.get("story_function", ""), "locked": False},
-        )
-    Job.objects.create(project=project, kind=Job.Kind.BIBLE, status=Job.Status.SUCCEEDED, agent_role="world_bible", backend="stub-text", result={"bible_id": bible.id})
-    return bible
-
-
 def _fit_model_text(model, field_name: str, value) -> str:
     """Bound generated text to the database field instead of trusting the LLM."""
     text = str(value or "").strip()
     field = model._meta.get_field(field_name)
     max_length = getattr(field, "max_length", None)
     return text[:max_length] if max_length else text
+
+
+def _fit_slug(model, value, fallback: str) -> str:
+    field = model._meta.get_field("key")
+    raw = slugify(str(value or "")) or fallback
+    return raw[: field.max_length].rstrip("-") or fallback
+
+
+def persist_bible(project: Project, payload: dict) -> WorldBible:
+    payload = normalize_bible_payload(payload)
+    version = (project.bibles.first().version + 1) if project.bibles.exists() else 1
+    bible = WorldBible.objects.create(project=project, version=version, payload=payload, locked=False)
+    for item in payload.get("characters", []):
+        Character.objects.update_or_create(
+            project=project,
+            key=_fit_slug(Character, item.get("id") or item.get("name"), "perso"),
+            defaults={
+                "bible": bible,
+                "name": _fit_model_text(Character, "name", item.get("name", "Sans nom")) or "Sans nom",
+                "role": _fit_model_text(Character, "role", item.get("role", "")),
+                "want": str(item.get("want") or ""),
+                "need": str(item.get("need") or ""),
+                "look": str(item.get("look") or ""),
+                "voice": str(item.get("voice") or ""),
+                "locked": False,
+            },
+        )
+    for item in payload.get("locations", []):
+        Location.objects.update_or_create(
+            project=project,
+            key=_fit_slug(Location, item.get("id") or item.get("name"), "lieu"),
+            defaults={
+                "bible": bible,
+                "name": _fit_model_text(Location, "name", item.get("name", "Lieu")) or "Lieu",
+                "look": str(item.get("look") or ""),
+                "time_of_day": _fit_model_text(Location, "time_of_day", item.get("time_of_day", "")),
+                "locked": False,
+            },
+        )
+    for item in payload.get("props", []):
+        Prop.objects.update_or_create(
+            project=project,
+            key=_fit_slug(Prop, item.get("id") or item.get("name"), "objet"),
+            defaults={
+                "bible": bible,
+                "name": _fit_model_text(Prop, "name", item.get("name", "Objet")) or "Objet",
+                "look": str(item.get("look") or ""),
+                "story_function": _fit_model_text(Prop, "story_function", item.get("story_function", "")),
+                "locked": False,
+            },
+        )
+    Job.objects.create(project=project, kind=Job.Kind.BIBLE, status=Job.Status.SUCCEEDED, agent_role="world_bible", backend="stub-text", result={"bible_id": bible.id})
+    return bible
 
 
 def persist_episodes(project: Project, plan: list[dict]) -> list[Episode]:
