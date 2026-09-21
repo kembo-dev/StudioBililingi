@@ -20,7 +20,13 @@ class WorldBibleAgent:
         return self.text.generate_json(
             system=(
                 "Tu construis une bible de série strictement à partir du concept fourni: personnages, lieux, objets. "
-                "Réponds en JSON compatible world_bible.schema.json. Ne verrouille rien: locked=false. "
+                "Réponds UNIQUEMENT avec un objet JSON. Il doit contenir obligatoirement les clés: "
+                "version, project_id, logline, tone, locked, characters, locations, props. "
+                "characters, locations et props sont TOUJOURS des tableaux JSON, jamais des objets ni du texte. "
+                "Chaque entrée characters est un objet {id,name,aliases,role,want,need,look,voice,locked}. "
+                "Chaque entrée locations est un objet {id,name,look,time_of_day,locked}. "
+                "Chaque entrée props est un objet {id,name,look,story_function,locked}. "
+                "Ne verrouille rien: locked=false. "
                 "N'invente pas de personnages ou motifs hérités d'un autre récit. Les mots de structure éditoriale "
                 "comme Concept, Début, Accroche, Fin, Conclusion, Twist, Genre ou Mode ne sont JAMAIS des personnages. "
                 "Un personnage doit être une personne ou présence réellement décrite ou nécessaire au concept. "
