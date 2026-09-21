@@ -10,6 +10,7 @@ from apps.jobs.models import Job
 from apps.projects.models import Project, Season
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 from apps.projects.beat_normalizer import normalize_beats
+from apps.projects.character_resolver import CharacterResolver, normalize_bible_payload
 
 
 def _ensure_org(name: str) -> Organization:
@@ -62,6 +63,7 @@ def seed_season_plan(concept: str) -> list[dict]:
 
 
 def persist_bible(project: Project, payload: dict) -> WorldBible:
+    payload = normalize_bible_payload(payload)
     version = (project.bibles.first().version + 1) if project.bibles.exists() else 1
     bible = WorldBible.objects.create(project=project, version=version, payload=payload, locked=False)
     for item in payload.get("characters", []):
@@ -220,7 +222,8 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
             status=Beat.Status.DRAFT,
         )
 
-        char_keys = _entity_keys(row.get("character_ids") or row.get("characters"))
+        resolver = CharacterResolver(project)
+        char_keys = resolver.canonical_keys(row.get("character_ids") or row.get("characters"))
         prop_keys = _entity_keys(row.get("prop_ids") or row.get("props"))
         characters = list(project.characters.filter(key__in=char_keys))
         props = list(project.props.filter(key__in=prop_keys))
@@ -364,15 +367,7 @@ def _beat_chunks(raw, fallback_text: str) -> list:
 
 
 def _speaker_names(row: dict, project: Project) -> list[str]:
-    keys = _entity_keys(row.get("character_ids") or row.get("characters"))
-    names = []
-    for key in keys:
-        character = project.characters.filter(key=key).first()
-        if character is None:
-            character = project.characters.filter(name__iexact=key).first()
-        if character and character.name not in names:
-            names.append(character.name)
-    return names
+    return CharacterResolver(project).names_for_row(row)
 
 
 def _extract_speaker_label(value: str) -> str:
