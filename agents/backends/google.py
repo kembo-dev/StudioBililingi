@@ -27,6 +27,25 @@ def _parse_json(text: str) -> dict:
     return data
 
 
+
+def _is_resource_exhausted(exc: Exception) -> bool:
+    text = str(exc)
+    return "429" in text and ("RESOURCE_EXHAUSTED" in text or "Resource exhausted" in text)
+
+
+def _with_quota_retry(call):
+    """Retry short-lived Vertex capacity/quota errors with bounded backoff."""
+    attempts = max(1, int(os.getenv("GOOGLE_QUOTA_RETRIES", "3")))
+    base = max(1.0, float(os.getenv("GOOGLE_QUOTA_RETRY_SECONDS", "4")))
+    for attempt in range(attempts):
+        try:
+            return call()
+        except Exception as exc:
+            if not _is_resource_exhausted(exc) or attempt + 1 >= attempts:
+                raise
+            time.sleep(base * (2 ** attempt))
+
+
 def _client():
     """Create a process-local GenAI client safe for Celery prefork workers."""
     from google import genai
@@ -70,7 +89,7 @@ class GoogleTextBackend:
         model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         client = _client()
         try:
-            response = client.models.generate_content(
+            response = _with_quota_retry(lambda: client.models.generate_content(
                 model=model,
                 contents=user,
                 config=types.GenerateContentConfig(
@@ -78,7 +97,7 @@ class GoogleTextBackend:
                     response_mime_type="application/json",
                     temperature=0.7,
                 ),
-            )
+            ))
         finally:
             client.close()
         payload = _parse_json(response.text or "")
