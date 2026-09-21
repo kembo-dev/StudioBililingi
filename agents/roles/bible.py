@@ -17,6 +17,9 @@ class WorldBibleAgent:
                 "N'invente pas de personnages ou motifs hérités d'un autre récit. Les mots de structure éditoriale "
                 "comme Concept, Début, Accroche, Fin, Conclusion, Twist, Genre ou Mode ne sont JAMAIS des personnages. "
                 "Un personnage doit être une personne ou présence réellement décrite ou nécessaire au concept. "
+                "Pour chaque personnage, fournis un id canonique court et stable dérivé de son nom, un name canonique "
+                "qui sera utilisé dans tous les scripts, et aliases contenant les variantes utiles de ce même nom. "
+                "N'utilise pas protag, protagoniste, hero, mentor, autre ou antag comme id si un vrai nom est disponible. "
                 "Les rôles, looks, voix, lieux et objets doivent être spécifiques à cette histoire."
             ),
             user=concept,
