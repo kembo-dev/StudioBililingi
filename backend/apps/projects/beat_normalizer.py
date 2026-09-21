@@ -153,6 +153,12 @@ def normalize_beats(
                 names = resolve_character_names(row)
                 if len(names) == 1:
                     label = names[0]
+                elif names:
+                    # A beat may show several characters while only one speaks.
+                    # Do not fail the whole episode: preserve an explicit,
+                    # deterministic attribution marker for later human review.
+                    label = names[0]
+                    row["speaker_inferred"] = True
             if label and not speaker_label(dialogue):
                 row["dialogue"] = f"{label.upper()} : {dialogue}"
 
