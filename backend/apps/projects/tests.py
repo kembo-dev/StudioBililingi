@@ -8,7 +8,7 @@ from apps.accounts.models import Organization
 from apps.production.models import Review
 from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
-from apps.projects.services import persist_beats, persist_episodes, review_beat
+from apps.projects.services import _usable_bible, persist_beats, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
 
 
@@ -134,4 +134,13 @@ class ProductionPipelineTests(TestCase):
             episode.logline,
             "Une logline longue reste autorisee car le champ est TextField.",
         )
+
+    def test_bible_requires_nonempty_named_character_list(self):
+        self.assertFalse(_usable_bible({}))
+        self.assertFalse(_usable_bible({"characters": {}}))
+        self.assertFalse(_usable_bible({"characters": []}))
+        self.assertFalse(_usable_bible({"characters": [{"id": "antoine"}]}))
+        self.assertTrue(_usable_bible({
+            "characters": [{"id": "antoine", "name": "Antoine"}],
+        }))
 
