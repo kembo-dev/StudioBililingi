@@ -8,8 +8,9 @@ from apps.accounts.models import Organization
 from apps.production.models import Review
 from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
-from apps.projects.services import _usable_bible, persist_beats, persist_episodes, review_beat
+from apps.projects.services import _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
+from apps.bible.models import Character, Location, Prop
 
 
 class ProductionPipelineTests(TestCase):
@@ -143,4 +144,40 @@ class ProductionPipelineTests(TestCase):
         self.assertTrue(_usable_bible({
             "characters": [{"id": "antoine", "name": "Antoine"}],
         }))
+
+    def test_bible_compact_fields_are_bounded(self):
+        persist_bible(self.project, {
+            "characters": [{
+                "id": "personnage-" + ("x" * 300),
+                "name": "N" * 260,
+                "role": "R" * 260,
+                "want": "objectif",
+                "need": "besoin",
+                "look": "look",
+                "voice": "voix",
+            }],
+            "locations": [{
+                "id": "lieu-" + ("x" * 300),
+                "name": "L" * 260,
+                "look": "look",
+                "time_of_day": "T" * 160,
+            }],
+            "props": [{
+                "id": "objet-" + ("x" * 300),
+                "name": "O" * 260,
+                "look": "look",
+                "story_function": "F" * 350,
+            }],
+        })
+
+        character = Character.objects.get(project=self.project)
+        location = Location.objects.get(project=self.project)
+        prop = Prop.objects.get(project=self.project)
+        self.assertEqual(len(character.name), 160)
+        self.assertEqual(len(character.role), 160)
+        self.assertEqual(len(location.name), 160)
+        self.assertEqual(len(location.time_of_day), 80)
+        self.assertEqual(len(prop.name), 160)
+        self.assertEqual(len(prop.story_function), 200)
+        self.assertLessEqual(len(prop.key), Prop._meta.get_field("key").max_length)
 
