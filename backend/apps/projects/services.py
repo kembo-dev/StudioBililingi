@@ -86,13 +86,27 @@ def persist_bible(project: Project, payload: dict) -> WorldBible:
     return bible
 
 
+def _fit_model_text(model, field_name: str, value) -> str:
+    """Bound generated text to the database field instead of trusting the LLM."""
+    text = str(value or "").strip()
+    field = model._meta.get_field(field_name)
+    max_length = getattr(field, "max_length", None)
+    return text[:max_length] if max_length else text
+
+
 def persist_episodes(project: Project, plan: list[dict]) -> list[Episode]:
     season = project.seasons.order_by("number").first()
     created = []
     for row in plan:
         episode, _ = Episode.objects.update_or_create(
-            season=season, number=row["number"],
-            defaults={"title": row["title"], "logline": row["logline"], "function_in_arc": row.get("function_in_arc", ""), "status": Episode.Status.OUTLINED},
+            season=season,
+            number=row["number"],
+            defaults={
+                "title": _fit_model_text(Episode, "title", row["title"]) or f"Épisode {row['number']}",
+                "logline": str(row["logline"] or "").strip(),
+                "function_in_arc": _fit_model_text(Episode, "function_in_arc", row.get("function_in_arc", "")),
+                "status": Episode.Status.OUTLINED,
+            },
         )
         created.append(episode)
     return created
@@ -264,10 +278,8 @@ def run_showrunner(project: Project) -> dict:
     except Exception as exc:
         raw = {"_error": str(exc)}
     if raw.get("tone") and not project.tone:
-        # LLMs may return a descriptive paragraph while Project.tone is a
-        # compact CharField. Never let generated prose overflow the database.
-        tone_field = Project._meta.get_field("tone")
-        project.tone = str(raw["tone"]).strip()[: tone_field.max_length]
+        # Generated prose must never be allowed to overflow compact DB fields.
+        project.tone = _fit_model_text(Project, "tone", raw["tone"])
         project.save(update_fields=["tone"])
     rows = _episode_rows(raw, project.concept)
     if raw.get("_error"):
