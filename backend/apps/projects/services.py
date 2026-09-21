@@ -390,8 +390,7 @@ def _normalize_conversation_beats(chunks: list, *, project: Project) -> list:
     return normalized
 
 
-def _validate_segmented_beats(chunks: list, *, form: str, project: Project) -> None:
-    """Reject only objectively unusable segmentation before persistence."""
+def _segmentation_errors(chunks: list, *, form: str, project: Project) -> list[str]:
     errors = []
     for i, row in enumerate(chunks, start=1):
         text = str(row.get("text") or "").strip()
@@ -406,25 +405,55 @@ def _validate_segmented_beats(chunks: list, *, form: str, project: Project) -> N
                     names = _speaker_names(row, project)
                     if len(names) != 1:
                         errors.append(f"beat {i}: dialogue sans locuteur identifiable")
+    return errors
+
+
+def _validate_segmented_beats(chunks: list, *, form: str, project: Project) -> None:
+    errors = _segmentation_errors(chunks, form=form, project=project)
     if errors:
         preview = "; ".join(errors[:8])
-        raise ValueError(f"Segmentation refusée: {preview}. Régénère les beats.")
+        raise ValueError(f"Segmentation refusée après correction automatique: {preview}.")
 
 
 def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     latest = episode.scripts.order_by("-version").first()
-    text = script_text or (latest.fountain if latest else None) or seed_script(episode)
+    text = script_text or (latest.fountain if latest else None)
+    if not text:
+        raise ValueError("Écris le script avant de lancer la segmentation")
+
+    project = episode.season.project
+    bible = project.bibles.first()
+    bible_payload = bible.payload if bible else {}
+
     try:
         from agents.roles.segmenter import BeatSegmenter
-        raw = BeatSegmenter().segment(text, form=episode.season.project.delivery, bible=(episode.season.project.bibles.first().payload if episode.season.project.bibles.first() else {}))
+        segmenter = BeatSegmenter()
+        raw = segmenter.segment(text, form=project.delivery, bible=bible_payload)
     except Exception as exc:
         raise RuntimeError(f"La segmentation a échoué: {exc}") from exc
+
     chunks = _beat_chunks(raw, "")
     if not chunks:
         raise RuntimeError("Le segmenter n'a retourné aucun beat exploitable")
-    project = episode.season.project
     if project.delivery == "conversation":
         chunks = _normalize_conversation_beats(chunks, project=project)
+
+    errors = _segmentation_errors(chunks, form=project.delivery, project=project)
+    if errors:
+        feedback = (
+            "La passe précédente est invalide. Corrige TOUT le découpage en conservant l'histoire et les scènes. "
+            "Pour chaque dialogue, mets explicitement NOM : réplique dans le champ dialogue, même si character_ids "
+            "contient plusieurs personnages. Aucun beat ne doit dépasser 32 mots; cible 20 à 28 mots. "
+            "Erreurs détectées: " + "; ".join(errors)
+        )
+        try:
+            raw = segmenter.segment(text, form=project.delivery, bible=bible_payload, feedback=feedback)
+        except Exception as exc:
+            raise RuntimeError(f"La correction automatique de la segmentation a échoué: {exc}") from exc
+        chunks = _beat_chunks(raw, "")
+        if project.delivery == "conversation":
+            chunks = _normalize_conversation_beats(chunks, project=project)
+
     _validate_segmented_beats(chunks, form=project.delivery, project=project)
     return persist_beats(episode, chunks)
 
