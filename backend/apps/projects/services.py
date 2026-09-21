@@ -374,15 +374,27 @@ def _speaker_names(row: dict, project: Project) -> list[str]:
     return names
 
 
+def _extract_speaker_label(value: str) -> str:
+    """Return an explicit CHARACTER : label found in structured dialogue or beat text."""
+    match = re.search(
+        r"(?m)(?:^|\\n|[.!?]\\s+)([A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 _'’.-]{1,40})\\s*:",
+        value or "",
+    )
+    return match.group(1).strip() if match else ""
+
+
 def _normalize_conversation_beats(chunks: list, *, project: Project) -> list:
-    """Add a speaker label only when the structured beat identifies one speaker."""
+    """Preserve/derive speaker labels without inventing a speaker when ambiguous."""
     normalized = []
     for item in chunks:
         row = dict(item)
         dialogue = str(row.get("dialogue") or "").strip()
-        if dialogue:
-            has_speaker = bool(re.search(r"(?m)^\\s*[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 _'’.-]{1,40}\\s*:", dialogue))
-            if not has_speaker:
+        text = str(row.get("text") or "").strip()
+        if dialogue and not _extract_speaker_label(dialogue):
+            label = _extract_speaker_label(text)
+            if label:
+                row["dialogue"] = f"{label} : {dialogue}"
+            else:
                 names = _speaker_names(row, project)
                 if len(names) == 1:
                     row["dialogue"] = f"{names[0].upper()} : {dialogue}"
@@ -399,8 +411,9 @@ def _segmentation_errors(chunks: list, *, form: str, project: Project) -> list[s
             errors.append(f"beat {i}: {count} mots (>32)")
         if form == "conversation":
             dialogue = str(row.get("dialogue") or "").strip()
+            text_value = str(row.get("text") or "").strip()
             if dialogue:
-                has_speaker = bool(re.search(r"(?m)^\\s*[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 _'’.-]{1,40}\\s*:", dialogue))
+                has_speaker = bool(_extract_speaker_label(dialogue) or _extract_speaker_label(text_value))
                 if not has_speaker:
                     names = _speaker_names(row, project)
                     if len(names) != 1:
