@@ -85,7 +85,7 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
         episode = self.get_object()
         try:
             write_script(episode)
-        except ValueError as exc:
+        except (ValueError, RuntimeError) as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         episode = self.get_queryset().get(pk=episode.pk)
         return Response(EpisodeSerializer(episode).data)
@@ -94,7 +94,10 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
     def segment(self, request, pk=None):
         episode = self.get_object()
         script = request.data.get("script")
-        run_segment(episode, script)
+        try:
+            run_segment(episode, script)
+        except (ValueError, RuntimeError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         episode = self.get_queryset().get(pk=episode.pk)
         return Response(EpisodeSerializer(episode).data)
 
