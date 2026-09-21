@@ -244,13 +244,16 @@ def _episode_rows(raw: dict, concept: str) -> list[dict]:
 def run_showrunner(project: Project) -> dict:
     try:
         from agents.roles.showrunner import Showrunner
-        raw = Showrunner().plan(project.concept)
-    except Exception:
-        raw = {}
+        raw = Showrunner().plan(project.concept, delivery=project.delivery)
+    except Exception as exc:
+        raw = {"_error": str(exc)}
     if raw.get("tone") and not project.tone:
         project.tone = raw["tone"]
         project.save(update_fields=["tone"])
-    episodes = persist_episodes(project, _episode_rows(raw, project.concept))
+    rows = _episode_rows(raw, project.concept)
+    if raw.get("_error"):
+        raise RuntimeError(f"Le showrunner n'a pas pu générer le plan de saison: {raw['_error']}")
+    episodes = persist_episodes(project, rows)
     return {"agent": raw, "episodes": [e.id for e in episodes]}
 
 
