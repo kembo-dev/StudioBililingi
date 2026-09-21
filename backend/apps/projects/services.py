@@ -9,6 +9,7 @@ from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import Project, Season
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
+from apps.projects.beat_normalizer import normalize_beats
 
 
 def _ensure_org(name: str) -> Organization:
@@ -448,8 +449,11 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     chunks = _beat_chunks(raw, "")
     if not chunks:
         raise RuntimeError("Le segmenter n'a retourné aucun beat exploitable")
-    if project.delivery == "conversation":
-        chunks = _normalize_conversation_beats(chunks, project=project)
+    chunks = normalize_beats(
+        chunks,
+        form=project.delivery,
+        resolve_character_names=lambda row: _speaker_names(row, project),
+    )
 
     errors = _segmentation_errors(chunks, form=project.delivery, project=project)
     if errors:
@@ -464,8 +468,11 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
         except Exception as exc:
             raise RuntimeError(f"La correction automatique de la segmentation a échoué: {exc}") from exc
         chunks = _beat_chunks(raw, "")
-        if project.delivery == "conversation":
-            chunks = _normalize_conversation_beats(chunks, project=project)
+        chunks = normalize_beats(
+            chunks,
+            form=project.delivery,
+            resolve_character_names=lambda row: _speaker_names(row, project),
+        )
 
     _validate_segmented_beats(chunks, form=project.delivery, project=project)
     return persist_beats(episode, chunks)
