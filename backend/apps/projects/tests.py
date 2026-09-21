@@ -8,7 +8,8 @@ from apps.accounts.models import Organization
 from apps.production.models import Review
 from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
-from apps.projects.services import _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
+from apps.projects.character_resolver import CharacterResolver
+from apps.projects.services import _canonical_speaker_from_dialogue, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
 from apps.bible.models import Character, Location, Prop
 
@@ -180,4 +181,29 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(len(prop.name), 160)
         self.assertEqual(len(prop.story_function), 200)
         self.assertLessEqual(len(prop.key), Prop._meta.get_field("key").max_length)
+
+    def test_conversation_speaker_resolves_title_case_and_alias(self):
+        persist_bible(self.project, {
+            "characters": [{
+                "id": "antoine-kasongo",
+                "name": "Antoine Kasongo",
+                "aliases": ["Antoine", "ANTOINE KASONGO"],
+                "role": "protagoniste",
+                "look": "artisan",
+            }],
+            "locations": [],
+            "props": [],
+        })
+        resolver = CharacterResolver(self.project)
+
+        self.assertEqual(
+            _canonical_speaker_from_dialogue("Antoine : Je reste.", resolver),
+            "Antoine Kasongo",
+        )
+        errors = _segmentation_errors([{
+            "text": "Antoine regarde la porte avant de répondre.",
+            "dialogue": "Antoine : Je reste.",
+            "character_ids": ["antoine-kasongo"],
+        }], form="conversation", project=self.project)
+        self.assertEqual(errors, [])
 
