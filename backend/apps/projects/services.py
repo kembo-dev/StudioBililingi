@@ -362,8 +362,36 @@ def _beat_chunks(raw, fallback_text: str) -> list:
     return chunks or [{"text": text} for text in segment_text(fallback_text)]
 
 
-def _validate_segmented_beats(chunks: list, *, form: str) -> None:
-    """Reject unusable LLM segmentation instead of silently persisting it."""
+def _speaker_names(row: dict, project: Project) -> list[str]:
+    keys = _entity_keys(row.get("character_ids") or row.get("characters"))
+    names = []
+    for key in keys:
+        character = project.characters.filter(key=key).first()
+        if character is None:
+            character = project.characters.filter(name__iexact=key).first()
+        if character and character.name not in names:
+            names.append(character.name)
+    return names
+
+
+def _normalize_conversation_beats(chunks: list, *, project: Project) -> list:
+    """Add a speaker label only when the structured beat identifies one speaker."""
+    normalized = []
+    for item in chunks:
+        row = dict(item)
+        dialogue = str(row.get("dialogue") or "").strip()
+        if dialogue:
+            has_speaker = bool(re.search(r"(?m)^\\s*[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 _'’.-]{1,40}\\s*:", dialogue))
+            if not has_speaker:
+                names = _speaker_names(row, project)
+                if len(names) == 1:
+                    row["dialogue"] = f"{names[0].upper()} : {dialogue}"
+        normalized.append(row)
+    return normalized
+
+
+def _validate_segmented_beats(chunks: list, *, form: str, project: Project) -> None:
+    """Reject only objectively unusable segmentation before persistence."""
     errors = []
     for i, row in enumerate(chunks, start=1):
         text = str(row.get("text") or "").strip()
@@ -372,14 +400,15 @@ def _validate_segmented_beats(chunks: list, *, form: str) -> None:
             errors.append(f"beat {i}: {count} mots (>32)")
         if form == "conversation":
             dialogue = str(row.get("dialogue") or "").strip()
-            spoken = dialogue or text
-            has_speaker = bool(re.search(r"(?m)(?:^|\\s)[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 _'’.-]{1,40}\\s*:", spoken))
-            looks_spoken = bool(dialogue) or any(mark in text for mark in ["«", "»", '"'])
-            if looks_spoken and not has_speaker:
-                errors.append(f"beat {i}: dialogue sans locuteur explicite")
+            if dialogue:
+                has_speaker = bool(re.search(r"(?m)^\\s*[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 _'’.-]{1,40}\\s*:", dialogue))
+                if not has_speaker:
+                    names = _speaker_names(row, project)
+                    if len(names) != 1:
+                        errors.append(f"beat {i}: dialogue sans locuteur identifiable")
     if errors:
         preview = "; ".join(errors[:8])
-        raise RuntimeError(f"Segmentation refusée: {preview}. Régénère les beats.")
+        raise ValueError(f"Segmentation refusée: {preview}. Régénère les beats.")
 
 
 def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
@@ -393,7 +422,10 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     chunks = _beat_chunks(raw, "")
     if not chunks:
         raise RuntimeError("Le segmenter n'a retourné aucun beat exploitable")
-    _validate_segmented_beats(chunks, form=episode.season.project.delivery)
+    project = episode.season.project
+    if project.delivery == "conversation":
+        chunks = _normalize_conversation_beats(chunks, project=project)
+    _validate_segmented_beats(chunks, form=project.delivery, project=project)
     return persist_beats(episode, chunks)
 
 
