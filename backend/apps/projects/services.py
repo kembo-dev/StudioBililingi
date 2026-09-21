@@ -261,9 +261,11 @@ def run_bible(project: Project) -> WorldBible:
     try:
         from agents.roles.bible import WorldBibleAgent
         raw = WorldBibleAgent().draft(project.concept)
-    except Exception:
-        raw = {}
-    payload = raw if raw.get("characters") else seed_bible(project.concept)
+    except Exception as exc:
+        raise RuntimeError(f"La génération de la bible a échoué: {exc}") from exc
+    if not isinstance(raw, dict) or not raw.get("characters"):
+        raise RuntimeError("La génération de la bible n'a retourné aucun personnage exploitable")
+    payload = raw
     payload.setdefault("project_id", str(project.id))
     payload["locked"] = False
     return persist_bible(project, payload)
@@ -318,11 +320,11 @@ def write_script(episode: Episode) -> Script:
             form=project.delivery,
             continuity=_canonical_continuity(episode),
         )
-    except Exception:
-        raw = {}
+    except Exception as exc:
+        raise RuntimeError(f"L'écriture du script a échoué: {exc}") from exc
     fountain = raw.get("fountain") if isinstance(raw, dict) else None
     if not fountain:
-        fountain = seed_script(episode)
+        raise RuntimeError("Le scénariste n'a retourné aucun script exploitable")
     script = Script.objects.create(episode=episode, version=episode.scripts.count() + 1, fountain=fountain, payload=raw if isinstance(raw, dict) else {"fountain": fountain})
     episode.status = Episode.Status.SCRIPTED
     episode.save(update_fields=["status"])
@@ -352,9 +354,12 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     try:
         from agents.roles.segmenter import BeatSegmenter
         raw = BeatSegmenter().segment(text, form=episode.season.project.delivery, bible=(episode.season.project.bibles.first().payload if episode.season.project.bibles.first() else {}))
-    except Exception:
-        raw = None
-    return persist_beats(episode, _beat_chunks(raw, text))
+    except Exception as exc:
+        raise RuntimeError(f"La segmentation a échoué: {exc}") from exc
+    chunks = _beat_chunks(raw, "")
+    if not chunks:
+        raise RuntimeError("Le segmenter n'a retourné aucun beat exploitable")
+    return persist_beats(episode, chunks)
 
 
 def review_beat(beat: Beat, decision: str, comment: str = "", take_id: int | None = None) -> Beat:
