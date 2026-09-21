@@ -11,6 +11,7 @@ from apps.projects.models import Project, Season
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 from apps.projects.beat_normalizer import normalize_beats
 from apps.projects.character_resolver import CharacterResolver, normalize_bible_payload
+from apps.projects.story_normalizer import bible_errors, normalize_story_bible, script_conversation_errors
 
 
 def _ensure_org(name: str) -> Organization:
@@ -278,12 +279,15 @@ def run_showrunner(project: Project) -> dict:
 def run_bible(project: Project) -> WorldBible:
     try:
         from agents.roles.bible import WorldBibleAgent
-        raw = WorldBibleAgent().draft(project.concept)
+        raw = WorldBibleAgent().draft(project.concept, delivery=project.delivery)
     except Exception as exc:
         raise RuntimeError(f"La génération de la bible a échoué: {exc}") from exc
     if not isinstance(raw, dict) or not raw.get("characters"):
         raise RuntimeError("La génération de la bible n'a retourné aucun personnage exploitable")
-    payload = raw
+    payload = normalize_story_bible(raw, delivery=project.delivery)
+    errors = bible_errors(payload, delivery=project.delivery)
+    if errors:
+        raise RuntimeError("Bible refusée: " + "; ".join(errors))
     payload.setdefault("project_id", str(project.id))
     payload["locked"] = False
     return persist_bible(project, payload)
@@ -343,6 +347,23 @@ def write_script(episode: Episode) -> Script:
     fountain = raw.get("fountain") if isinstance(raw, dict) else None
     if not fountain:
         raise RuntimeError("Le scénariste n'a retourné aucun script exploitable")
+    if project.delivery == "conversation":
+        errors = script_conversation_errors(fountain, bible.payload)
+        if errors:
+            try:
+                raw = Screenwriter().write(
+                    concept=project.concept,
+                    bible=bible.payload,
+                    episode={"number": episode.number, "title": episode.title, "logline": episode.logline},
+                    form=project.delivery,
+                    continuity=_canonical_continuity(episode),
+                )
+            except Exception as exc:
+                raise RuntimeError(f"La correction du script conversation a échoué: {exc}") from exc
+            fountain = raw.get("fountain") if isinstance(raw, dict) else None
+            errors = script_conversation_errors(fountain or "", bible.payload)
+            if not fountain or errors:
+                raise RuntimeError("Script conversation refusé: " + "; ".join(errors or ["script vide"]))
     script = Script.objects.create(episode=episode, version=episode.scripts.count() + 1, fountain=fountain, payload=raw if isinstance(raw, dict) else {"fountain": fountain})
     episode.status = Episode.Status.SCRIPTED
     episode.save(update_fields=["status"])
