@@ -31,22 +31,40 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ser = ProjectCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         project = create_project(**ser.validated_data)
-        run_showrunner(project)
-        run_bible(project)
+        try:
+            run_showrunner(project)
+            run_bible(project)
+        except RuntimeError as exc:
+            message = str(exc)
+            code = status.HTTP_429_TOO_MANY_REQUESTS if "429" in message and "RESOURCE_EXHAUSTED" in message else status.HTTP_400_BAD_REQUEST
+            return Response(
+                {"detail": message, "project_id": project.id, "retryable": code == status.HTTP_429_TOO_MANY_REQUESTS},
+                status=code,
+            )
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="generate-bible")
     def generate_bible(self, request, pk=None):
         project = self.get_object()
-        run_bible(project)
+        try:
+            run_bible(project)
+        except RuntimeError as exc:
+            message = str(exc)
+            code = status.HTTP_429_TOO_MANY_REQUESTS if "429" in message and "RESOURCE_EXHAUSTED" in message else status.HTTP_400_BAD_REQUEST
+            return Response({"detail": message, "retryable": code == status.HTTP_429_TOO_MANY_REQUESTS}, status=code)
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data)
 
     @action(detail=True, methods=["post"], url_path="plan-season")
     def plan_season(self, request, pk=None):
         project = self.get_object()
-        run_showrunner(project)
+        try:
+            run_showrunner(project)
+        except RuntimeError as exc:
+            message = str(exc)
+            code = status.HTTP_429_TOO_MANY_REQUESTS if "429" in message and "RESOURCE_EXHAUSTED" in message else status.HTTP_400_BAD_REQUEST
+            return Response({"detail": message, "retryable": code == status.HTTP_429_TOO_MANY_REQUESTS}, status=code)
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data)
 
