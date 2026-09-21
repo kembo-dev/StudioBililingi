@@ -20,10 +20,14 @@ class Screenwriter:
     ) -> dict:
         shapes = {
             "conversation": (
-                "MODE CONVERSATION. Le scénario est porté par de vraies répliques entre les personnages. "
-                "Utilise des en-têtes de scène (INT./EXT. - LIEU - JOUR/NUIT), de très brèves actions visuelles, "
-                "puis des répliques au format NOM : texte. Pas de narrateur et pas de prose racontant ce que les "
-                "personnages pourraient dire. La conversation doit faire avancer l'action et rester jouable à l'écran."
+                "MODE CONVERSATION. Le scénario est porté par de vrais échanges entre personnages présents ou reliés "
+                "de façon crédible (face à face, téléphone, visio). Utilise des en-têtes de scène "
+                "(INT./EXT. - LIEU - JOUR/NUIT), de très brèves actions visuelles, puis des répliques au format "
+                "NOM CANONIQUE : texte. Quand une scène contient un échange, écris les DEUX côtés de la conversation: "
+                "question/réponse/réaction. N'écris jamais une série de réponses du protagoniste à un interlocuteur "
+                "inaudible. Un monologue ou une parole au grand-père absent reste possible ponctuellement si l'histoire "
+                "l'exige, mais ne doit pas devenir la structure dominante de l'épisode. Pas de narrateur. "
+                "Utilise uniquement les noms canoniques de la bible et fais avancer l'action par le dialogue."
             ),
             "voix_off": (
                 "MODE VOIX OFF. La narration VOIX OFF porte l'histoire et les images l'illustrent. "
