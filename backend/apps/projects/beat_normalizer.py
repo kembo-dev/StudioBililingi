@@ -154,11 +154,10 @@ def normalize_beats(
                 if len(names) == 1:
                     label = names[0]
                 elif names:
-                    # A beat may show several characters while only one speaks.
-                    # Do not fail the whole episode: preserve an explicit,
-                    # deterministic attribution marker for later human review.
-                    label = names[0]
-                    row["speaker_inferred"] = True
+                    # Multiple visible characters do not identify the speaker.
+                    # Keep the dialogue untouched and let semantic validation
+                    # request a repair instead of attributing it arbitrarily.
+                    row["speaker_candidates"] = names
             if label and not speaker_label(dialogue):
                 row["dialogue"] = f"{label.upper()} : {dialogue}"
 
