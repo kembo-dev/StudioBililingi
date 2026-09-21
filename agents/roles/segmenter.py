@@ -12,7 +12,7 @@ class BeatSegmenter:
     def __init__(self):
         self.text = get_text()
 
-    def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None) -> dict:
+    def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None, feedback: str = "") -> dict:
         mode_rules = {
             "conversation": (
                 "CONVERSATION: chaque parole doit être explicitement attribuée. Dans text ET dialogue, écris toujours "
@@ -45,5 +45,9 @@ class BeatSegmenter:
                 "et l'identité/continuité à préserver. "
                 f"{mode_rules.get(form, mode_rules['storytell'])}"
             ),
-            user=f"MODE: {form}\n\nBIBLE:\n{bible or {}}\n\nSCRIPT:\n{script}",
+            user=(
+                f"MODE: {form}\n\nBIBLE:\n{bible or {}}\n\n"
+                f"CORRECTIONS OBLIGATOIRES DE LA PASSE PRECEDENTE:\n{feedback or 'Aucune'}\n\n"
+                f"SCRIPT:\n{script}"
+            ),
         )
