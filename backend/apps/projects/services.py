@@ -119,8 +119,19 @@ def seed_script(episode: Episode) -> str:
 
 
 def segment_text(text: str, target: int = 24) -> list[str]:
-    words = _words(text)
-    return [" ".join(words[i:i + target]) for i in range(0, len(words), target)] if words else []
+    """Legacy fallback: split on sentence boundaries, never every N words."""
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?…])\\s+", text.strip()) if s.strip()]
+    chunks, current = [], []
+    for sentence in sentences:
+        candidate = " ".join(current + [sentence]).strip()
+        if current and len(_words(candidate)) > 32:
+            chunks.append(" ".join(current))
+            current = [sentence]
+        else:
+            current.append(sentence)
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
 
 
 def _entity_keys(value) -> list[str]:
@@ -351,6 +362,26 @@ def _beat_chunks(raw, fallback_text: str) -> list:
     return chunks or [{"text": text} for text in segment_text(fallback_text)]
 
 
+def _validate_segmented_beats(chunks: list, *, form: str) -> None:
+    """Reject unusable LLM segmentation instead of silently persisting it."""
+    errors = []
+    for i, row in enumerate(chunks, start=1):
+        text = str(row.get("text") or "").strip()
+        count = len(_words(text))
+        if count > 32:
+            errors.append(f"beat {i}: {count} mots (>32)")
+        if form == "conversation":
+            dialogue = str(row.get("dialogue") or "").strip()
+            spoken = dialogue or text
+            has_speaker = bool(re.search(r"(?m)(?:^|\\s)[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 _'’.-]{1,40}\\s*:", spoken))
+            looks_spoken = bool(dialogue) or any(mark in text for mark in ["«", "»", '"'])
+            if looks_spoken and not has_speaker:
+                errors.append(f"beat {i}: dialogue sans locuteur explicite")
+    if errors:
+        preview = "; ".join(errors[:8])
+        raise RuntimeError(f"Segmentation refusée: {preview}. Régénère les beats.")
+
+
 def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     latest = episode.scripts.order_by("-version").first()
     text = script_text or (latest.fountain if latest else None) or seed_script(episode)
@@ -362,6 +393,7 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     chunks = _beat_chunks(raw, "")
     if not chunks:
         raise RuntimeError("Le segmenter n'a retourné aucun beat exploitable")
+    _validate_segmented_beats(chunks, form=episode.season.project.delivery)
     return persist_beats(episode, chunks)
 
 
