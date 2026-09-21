@@ -15,7 +15,9 @@ class BeatSegmenter:
     def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None) -> dict:
         mode_rules = {
             "conversation": (
-                "CONVERSATION: conserve le locuteur et sa réplique. Ne transforme jamais le dialogue en narration. "
+                "CONVERSATION: chaque parole doit être explicitement attribuée. Dans text ET dialogue, écris toujours "
+                "NOM_DU_PERSONNAGE : réplique; jamais une réplique anonyme. Si deux personnes parlent dans le même beat, "
+                "garde chaque nom devant sa propre réplique. Ne transforme jamais le dialogue en narration. "
                 "Fusionne une micro-réplique avec l'action ou la réaction visuelle adjacente dans la même scène."
             ),
             "voix_off": "VOIX OFF: conserve explicitement la voix off dans dialogue et décris séparément l'image.",
@@ -28,8 +30,11 @@ class BeatSegmenter:
                 "Un beat est une unité visuelle cohérente de 6 à 8 secondes avec une seule intention dramatique. "
                 "Ne crée jamais un clip autonome pour une micro-réplique ou réaction comme Non, Allô, Oui, un nom "
                 "ou une phrase de quelques mots: fusionne-la avec l'action, la réaction ou la réplique adjacente dans "
-                "la même scène. Vise généralement 12 à 32 mots de contenu utile par beat; dépasse cette plage seulement "
-                "si l'unité visuelle l'exige. Une longue réplique doit être découpée à une pause naturelle avec une "
+                "la même scène. La cible de production est 24 mots par beat. Pour chaque beat, vise 20 à 28 mots; "
+                "ne dépasse jamais 32 mots. Si le contenu dépasse 32 mots, crée plusieurs beats en conservant le même "
+                "scene_index et la continuité. Un beat de moins de 12 mots doit être fusionné avec un voisin compatible, "
+                "sauf silence/action visuelle qui remplit réellement 6 à 8 secondes. Une longue réplique doit être "
+                "découpée à une pause naturelle avec une "
                 "action ou réaction visible pour chaque partie. Respecte les changements de scène, de lieu, de locuteur "
                 "et d'action. Retourne JSON {\"beats\": [...]} uniquement. Chaque beat doit fournir: "
                 "text, scene_index, scene_heading, scene_summary, location_id, time_of_day, lighting, "
