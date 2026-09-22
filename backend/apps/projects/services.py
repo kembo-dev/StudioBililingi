@@ -964,6 +964,154 @@ def _validate_segmented_beats(chunks: list, *, form: str, project: Project) -> N
         raise ValueError(f"Segmentation refusée après correction automatique: {preview}.")
 
 
+def _scene_plan_errors(
+    scenes: list[dict],
+    *,
+    project: Project,
+    episode: Episode,
+    expected_events: set[str],
+) -> list[str]:
+    errors = []
+    canonical_locations = set(project.locations.values_list("key", flat=True))
+    canonical_characters = set(project.characters.values_list("key", flat=True))
+    canonical_props = set(project.props.values_list("key", flat=True))
+    seen_indexes = set()
+    used_events = set()
+    total_seconds = 0
+
+    for position, scene in enumerate(scenes, start=1):
+        try:
+            index = int(scene.get("index"))
+        except (TypeError, ValueError):
+            errors.append(f"scène {position}: index invalide")
+            continue
+        if index in seen_indexes:
+            errors.append(f"scene_index dupliqué: {index}")
+        seen_indexes.add(index)
+
+        location_id = str(scene.get("location_id") or "").strip()
+        if not location_id or location_id not in canonical_locations:
+            errors.append(f"scène {index}: location_id canonique invalide: {location_id or 'vide'}")
+
+        character_ids = {str(value).strip() for value in (scene.get("character_ids") or []) if str(value).strip()}
+        prop_ids = {str(value).strip() for value in (scene.get("prop_ids") or []) if str(value).strip()}
+        unknown_characters = sorted(character_ids - canonical_characters)
+        unknown_props = sorted(prop_ids - canonical_props)
+        if unknown_characters:
+            errors.append(f"scène {index}: personnages inconnus: {', '.join(unknown_characters)}")
+        if unknown_props:
+            errors.append(f"scène {index}: objets inconnus: {', '.join(unknown_props)}")
+
+        event_ids = {str(value).strip() for value in (scene.get("event_ids") or []) if str(value).strip()}
+        unknown_events = sorted(event_ids - expected_events)
+        if unknown_events:
+            errors.append(f"scène {index}: événements non autorisés: {', '.join(unknown_events)}")
+        used_events.update(event_ids)
+
+        try:
+            seconds = int(scene.get("target_seconds") or 0)
+        except (TypeError, ValueError):
+            seconds = 0
+        if seconds <= 0:
+            errors.append(f"scène {index}: target_seconds doit être positif")
+        total_seconds += max(0, seconds)
+
+    missing = sorted(expected_events - used_events)
+    if missing:
+        errors.append("événements sans scène: " + ", ".join(missing))
+    target = int(project.episode_duration_seconds or 60)
+    tolerance = max(10, round(target * 0.25))
+    if scenes and abs(total_seconds - target) > tolerance:
+        errors.append(
+            f"durée du scene plan {total_seconds}s hors cible {target}s (tolérance ±{tolerance}s)"
+        )
+    return errors
+
+
+def plan_scenes(episode: Episode, script_text: str) -> list[dict]:
+    project = episode.season.project
+    bible = project.bibles.first()
+    if bible is None or not bible.locked:
+        raise ValueError("Verrouille la bible avant de planifier les scènes")
+    contract = narrative_contract_payload(project)
+    expected_events = {
+        event["key"] for event in contract.get("events", [])
+        if event.get("episode_number") == episode.number
+    }
+    if not expected_events:
+        raise ValueError(f"Aucun événement narratif canonique assigné à E{episode.number}")
+
+    from agents.roles.scene_planner import ScenePlanner
+
+    try:
+        raw = ScenePlanner().plan(
+            script=script_text,
+            episode={
+                "number": episode.number,
+                "title": episode.title,
+                "logline": episode.logline,
+                "function_in_arc": episode.function_in_arc,
+            },
+            bible=bible.payload,
+            narrative_contract=contract,
+            project_constraints=project_constraints_payload(project),
+        )
+    except Exception as exc:
+        raise RuntimeError(f"La planification des scènes a échoué: {exc}") from exc
+
+    scenes = raw.get("scenes") if isinstance(raw, dict) else None
+    scenes = [dict(scene) for scene in (scenes or []) if isinstance(scene, dict)]
+    if not scenes:
+        raise RuntimeError("Le Scene Planner n'a retourné aucune scène exploitable")
+    errors = _scene_plan_errors(
+        scenes,
+        project=project,
+        episode=episode,
+        expected_events=expected_events,
+    )
+    if errors:
+        raise ValueError("Scene Plan refusé: " + "; ".join(errors))
+    return scenes
+
+
+def _beat_scene_plan_errors(chunks: list[dict], scene_plan: list[dict]) -> list[str]:
+    errors = []
+    planned = {}
+    for scene in scene_plan:
+        try:
+            index = int(scene.get("index"))
+        except (TypeError, ValueError):
+            continue
+        planned[index] = {
+            "location_id": str(scene.get("location_id") or "").strip(),
+            "time_of_day": str(scene.get("time_of_day") or "").strip().casefold(),
+            "event_ids": {str(value).strip() for value in (scene.get("event_ids") or []) if str(value).strip()},
+        }
+
+    for position, row in enumerate(chunks, start=1):
+        try:
+            scene_index = int(row.get("scene_index"))
+        except (TypeError, ValueError):
+            errors.append(f"beat {position}: scene_index invalide")
+            continue
+        scene = planned.get(scene_index)
+        if scene is None:
+            errors.append(f"beat {position}: scène {scene_index} absente du Scene Plan")
+            continue
+        location_id = str(row.get("location_id") or "").strip()
+        if location_id != scene["location_id"]:
+            errors.append(
+                f"beat {position}: location_id {location_id or 'vide'} différent du Scene Plan {scene['location_id']}"
+            )
+        time_of_day = str(row.get("time_of_day") or "").strip().casefold()
+        if scene["time_of_day"] and time_of_day != scene["time_of_day"]:
+            errors.append(f"beat {position}: time_of_day différent du Scene Plan")
+        event_id = str(row.get("event_id") or "").strip()
+        if event_id not in scene["event_ids"]:
+            errors.append(f"beat {position}: {event_id or 'event_id vide'} non autorisé dans scène {scene_index}")
+    return errors
+
+
 def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     latest = episode.scripts.order_by("-version").first()
     text = script_text or (latest.fountain if latest else None)
@@ -974,12 +1122,19 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     bible = project.bibles.first()
     _ensure_script_speakers(project, bible, text)
     bible_payload = bible.payload if bible else {}
+    scene_plan = plan_scenes(episode, text)
 
     try:
         from agents.roles.segmenter import BeatSegmenter
         segmenter = BeatSegmenter()
         contract_payload = narrative_contract_payload(project)
-        raw = segmenter.segment(text, form=project.delivery, bible=bible_payload, narrative_contract=contract_payload)
+        raw = segmenter.segment(
+            text,
+            form=project.delivery,
+            bible=bible_payload,
+            narrative_contract=contract_payload,
+            scene_plan=scene_plan,
+        )
     except Exception as exc:
         raise RuntimeError(f"La segmentation a échoué: {exc}") from exc
 
@@ -1003,7 +1158,14 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
             "Erreurs détectées: " + "; ".join(errors)
         )
         try:
-            raw = segmenter.segment(text, form=project.delivery, bible=bible_payload, feedback=feedback, narrative_contract=contract_payload)
+            raw = segmenter.segment(
+                text,
+                form=project.delivery,
+                bible=bible_payload,
+                feedback=feedback,
+                narrative_contract=contract_payload,
+                scene_plan=scene_plan,
+            )
         except Exception as exc:
             raise RuntimeError(f"La correction automatique de la segmentation a échoué: {exc}") from exc
         chunks = _beat_chunks(raw, "")
@@ -1012,6 +1174,10 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
             form=project.delivery,
             resolve_character_names=resolver.names_for_row,
         )
+
+    scene_plan_errors = _beat_scene_plan_errors(chunks, scene_plan)
+    if scene_plan_errors:
+        raise ValueError("Segmentation hors Scene Plan: " + "; ".join(scene_plan_errors))
 
     contract_payload = narrative_contract_payload(project)
     expected_events = {
