@@ -3,6 +3,9 @@ from pathlib import Path
 from django.conf import settings
 from django.db import transaction
 
+from django.utils.text import slugify
+
+from apps.bible.models import Character, Location, Prop
 from apps.production.models import Asset
 from apps.projects.models import Project
 
@@ -125,3 +128,84 @@ def regenerate_character_ref(project: Project, character_key: str):
         except OSError:
             pass
     return asset
+
+
+
+def add_manual_ref(
+    project: Project,
+    *,
+    entity_type: str,
+    name: str,
+    look: str,
+    role: str = "",
+    time_of_day: str = "",
+    story_function: str = "",
+):
+    bible = project.bibles.first()
+    if bible is None or not bible.locked:
+        raise ValueError("Verrouille la bible avant d'ajouter une référence")
+
+    entity_type = str(entity_type or "").strip().lower()
+    name = str(name or "").strip()
+    look = str(look or "").strip()
+    if entity_type not in {"character", "location", "prop"}:
+        raise ValueError("Type de référence invalide")
+    if not name or not look:
+        raise ValueError("Le nom et la description visuelle sont requis")
+
+    model = {"character": Character, "location": Location, "prop": Prop}[entity_type]
+    base_key = slugify(name)[:45] or entity_type
+    key = base_key
+    suffix = 2
+    while model.objects.filter(project=project, key=key).exists():
+        key = f"{base_key[:40]}-{suffix}"
+        suffix += 1
+
+    with transaction.atomic():
+        if entity_type == "character":
+            entity = Character.objects.create(
+                project=project,
+                bible=bible,
+                key=key,
+                name=name,
+                role=str(role or "Personnage secondaire").strip(),
+                look=look,
+                locked=True,
+            )
+        elif entity_type == "location":
+            entity = Location.objects.create(
+                project=project,
+                bible=bible,
+                key=key,
+                name=name,
+                look=look,
+                time_of_day=str(time_of_day or "").strip(),
+                locked=True,
+            )
+        else:
+            entity = Prop.objects.create(
+                project=project,
+                bible=bible,
+                key=key,
+                name=name,
+                look=look,
+                story_function=str(story_function or "").strip(),
+                locked=True,
+            )
+
+        payload = dict(bible.payload or {})
+        bucket = {"character": "characters", "location": "locations", "prop": "props"}[entity_type]
+        rows = list(payload.get(bucket) or [])
+        row = {"id": key, "name": name, "look": look}
+        if entity_type == "character":
+            row["role"] = entity.role
+        elif entity_type == "location":
+            row["time_of_day"] = entity.time_of_day
+        else:
+            row["story_function"] = entity.story_function
+        rows.append(row)
+        payload[bucket] = rows
+        bible.payload = payload
+        bible.save(update_fields=["payload"])
+
+    return entity
