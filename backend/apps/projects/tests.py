@@ -9,6 +9,7 @@ from apps.production.models import Review
 from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
 from apps.projects.character_resolver import CharacterResolver
+from apps.projects.beat_normalizer import normalize_beats
 from apps.projects.continuity import build_continuity_context, continuity_prompt
 from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
@@ -329,4 +330,50 @@ class ProductionPipelineTests(TestCase):
         cleanup_generated_script_characters(self.project)
         self.assertFalse(Character.objects.filter(project=self.project, name="Title").exists())
         self.assertTrue(Character.objects.filter(project=self.project, name="Claire Moreau").exists())
+
+    def test_normalizer_splits_two_speakers_into_distinct_beats(self):
+        self.project.delivery = "conversation"
+        self.project.save(update_fields=["delivery"])
+        persist_bible(self.project, {
+            "characters": [
+                {"id": "claire-moreau", "name": "Claire Moreau", "aliases": ["CLAIRE MOREAU"]},
+                {"id": "leo-dubois", "name": "Léo Dubois", "aliases": ["LEO DUBOIS"]},
+            ],
+            "locations": [], "props": [],
+        })
+        resolver = CharacterResolver(self.project)
+        rows = normalize_beats([{
+            "text": "CLAIRE MOREAU : Une victoire silencieuse, loin des regards. LEO DUBOIS : Exactement, Claire. La quête continue dans les profondeurs.",
+            "dialogue": "CLAIRE MOREAU : Une victoire silencieuse, loin des regards. LEO DUBOIS : Exactement, Claire. La quête continue dans les profondeurs.",
+            "character_ids": ["claire-moreau", "leo-dubois"],
+            "scene_index": 1,
+        }], form="conversation", resolve_character_names=resolver.names_for_row)
+
+        self.assertEqual(len(rows), 2)
+        self.assertIn("CLAIRE MOREAU", rows[0]["text"])
+        self.assertNotIn("LEO DUBOIS", rows[0]["text"])
+        self.assertIn("LEO DUBOIS", rows[1]["text"])
+        self.assertEqual(_segmentation_errors(rows, form="conversation", project=self.project), [])
+        self.assertEqual(rows[0]["speaker_id"], "claire-moreau")
+        self.assertEqual(rows[1]["speaker_id"], "leo-dubois")
+
+    def test_normalizer_does_not_merge_short_dialogue_across_speakers(self):
+        rows = normalize_beats([
+            {"text": "CLAIRE MOREAU : Des mondes invisibles ?", "dialogue": "CLAIRE MOREAU : Des mondes invisibles ?", "scene_index": 1},
+            {"text": "LEO DUBOIS : Exactement, Claire.", "dialogue": "LEO DUBOIS : Exactement, Claire.", "scene_index": 1},
+        ], form="conversation", resolve_character_names=lambda row: [])
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(rows[0]["text"].startswith("CLAIRE MOREAU"))
+        self.assertTrue(rows[1]["text"].startswith("LEO DUBOIS"))
+
+    def test_long_dialogue_split_does_not_duplicate_full_dialogue(self):
+        source = "CLAIRE MOREAU : " + " ".join(f"mot{i}" for i in range(70))
+        rows = normalize_beats([{
+            "text": source,
+            "dialogue": source,
+            "scene_index": 1,
+        }], form="conversation", resolve_character_names=lambda row: ["Claire Moreau"])
+        self.assertGreater(len(rows), 1)
+        self.assertTrue(all(len(row["text"].split()) <= 32 for row in rows))
+        self.assertTrue(all(len(row["dialogue"].split()) <= 35 for row in rows))
 
