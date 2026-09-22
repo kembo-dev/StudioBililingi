@@ -184,8 +184,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
         job = enqueue(project=project, kind=Job.Kind.IMAGE, agent_role="art_director", payload={"project_id": project.id})
         if is_eager() and job.status == Job.Status.FAILED:
             return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
-        project = self.get_queryset().get(pk=project.pk)
-        return Response(ProjectSerializer(project).data)
+        if is_eager():
+            project = self.get_queryset().get(pk=project.pk)
+            return Response({
+                "job_id": job.id,
+                "status": job.status,
+                "project": ProjectSerializer(project).data,
+            })
+        return Response(
+            {"job_id": job.id, "status": job.status},
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
