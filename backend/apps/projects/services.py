@@ -231,9 +231,9 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
                 episode=episode,
                 script=script,
                 index=scene_index,
-                heading=str(row.get("scene_heading") or row.get("heading") or ""),
+                heading=_fit_model_text(Scene, "heading", row.get("scene_heading") or row.get("heading") or ""),
                 summary=str(row.get("scene_summary") or ""),
-                time_of_day=str(row.get("time_of_day") or ""),
+                time_of_day=_fit_model_text(Scene, "time_of_day", row.get("time_of_day") or ""),
                 lighting=str(row.get("lighting") or ""),
                 continuity_state=row.get("continuity") if isinstance(row.get("continuity"), dict) else {},
             )
@@ -268,7 +268,7 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
             location=location,
             camera=row.get("camera") if isinstance(row.get("camera"), dict) else {},
             continuity=row.get("continuity") if isinstance(row.get("continuity"), dict) else {},
-            emotion=str(row.get("emotion") or ""),
+            emotion=_fit_model_text(Beat, "emotion", row.get("emotion") or ""),
             dialogue=str(row.get("dialogue") or ""),
             speaker_id=(
                 project.characters.filter(key=speaker.key).values_list("id", flat=True).first()
@@ -276,7 +276,7 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
             ),
             video_prompt=str(row.get("video_prompt") or text),
             negative_prompt=str(row.get("negative_prompt") or ""),
-            backend=str(row.get("backend") or "google-veo-3.1"),
+            backend=_fit_model_text(Beat, "backend", row.get("backend") or "google-veo-3.1"),
             status=Beat.Status.DRAFT,
         )
 
