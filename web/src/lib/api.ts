@@ -19,3 +19,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const raw = await res.text();
   return (raw ? JSON.parse(raw) : undefined) as T;
 }
+
+
+export function mediaUrl(uri?: string | null): string {
+  if (!uri) return "";
+  if (/^(https?:|data:|blob:)/.test(uri)) return uri;
+  if (uri.startsWith("/")) return `${API}${uri}`;
+  return `${API}/${uri}`;
+}
