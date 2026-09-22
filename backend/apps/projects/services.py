@@ -467,6 +467,75 @@ def write_script(episode: Episode) -> Script:
     return script
 
 
+def _ensure_script_speakers(project: Project, bible: WorldBible | None, script_text: str) -> None:
+    """Promote legitimate named script speakers into the canonical bible.
+
+    The screenwriter may introduce a narratively necessary interlocutor (pilot,
+    colleague, witness) that was absent from the first bible draft. Keeping that
+    person outside the bible makes speaker_id impossible to resolve downstream.
+    """
+    if bible is None:
+        return
+    payload = dict(bible.payload or {})
+    characters = list(payload.get("characters") or [])
+    resolver = CharacterResolver(project)
+    known_tokens = {identity_token(item.get("name")) for item in characters if isinstance(item, dict)}
+    changed = False
+
+    for line in str(script_text or "").splitlines():
+        match = re.match(r"^\s*([^:\n]{2,60})\s*:\s*\S", line)
+        if not match:
+            continue
+        label = match.group(1).strip().strip('"')
+        if resolver.resolve(label):
+            continue
+        # Ignore screenplay/control labels; only promote plausible human names.
+        token = identity_token(label)
+        if not token or token in {"voixoff", "image", "scene", "int", "ext"}:
+            continue
+        words = [w for w in re.split(r"\s+", label) if w]
+        if not (1 <= len(words) <= 5) or any(ch.isdigit() for ch in label):
+            continue
+        key = slugify(re.sub(r"^(dr\.?|docteur|m\.?|mme)\s+", "", label, flags=re.I)) or slugify(label)
+        if not key or token in known_tokens:
+            continue
+        characters.append({
+            "id": key,
+            "name": label,
+            "aliases": [label, label.upper()],
+            "role": "interlocuteur",
+            "want": "",
+            "need": "",
+            "look": "Apparence à définir et verrouiller avant génération vidéo.",
+            "voice": "",
+            "locked": False,
+            "source": "screenwriter",
+        })
+        known_tokens.add(token)
+        changed = True
+
+    if changed:
+        payload["characters"] = characters
+        normalized = normalize_bible_payload(payload)
+        bible.payload = normalized
+        bible.save(update_fields=["payload"])
+        for item in normalized.get("characters") or []:
+            Character.objects.update_or_create(
+                project=project,
+                key=_fit_slug(Character, item.get("id") or item.get("name"), "perso"),
+                defaults={
+                    "bible": bible,
+                    "name": _fit_model_text(Character, "name", item.get("name", "Sans nom")) or "Sans nom",
+                    "role": _fit_model_text(Character, "role", item.get("role", "")),
+                    "want": str(item.get("want") or ""),
+                    "need": str(item.get("need") or ""),
+                    "look": str(item.get("look") or ""),
+                    "voice": str(item.get("voice") or ""),
+                    "locked": bible.locked,
+                },
+            )
+
+
 def _beat_chunks(raw, fallback_text: str) -> list:
     items = raw if isinstance(raw, list) else (raw.get("beats") if isinstance(raw, dict) else None)
     chunks = []
@@ -574,6 +643,7 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
 
     project = episode.season.project
     bible = project.bibles.first()
+    _ensure_script_speakers(project, bible, text)
     bible_payload = bible.payload if bible else {}
 
     try:
