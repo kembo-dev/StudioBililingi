@@ -157,8 +157,8 @@ export default function ProjectPage() {
                   <button
                     onClick={() => run(
                       `char-ref-${c.id}`,
-                      `/api/projects/${project.id}/regenerate-character-ref/`,
-                      { character_key: c.key },
+                      `/api/projects/${project.id}/regenerate-reference/`,
+                      { entity_type: "character", entity_key: c.key },
                     )}
                     className="rounded-lg border border-[#e8c36a] px-2 py-1 text-[11px] text-[#e8c36a]"
                   >
@@ -171,14 +171,27 @@ export default function ProjectPage() {
           ))}
           {(bible?.locations ?? []).map((l) => (
             <article key={l.id} className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
-              <p className="font-medium">{l.name}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-medium">{l.name}</p>
+                {bible?.locked ? (
+                  <button onClick={() => run(`loc-ref-${l.id}`, `/api/projects/${project.id}/regenerate-reference/`, { entity_type: "location", entity_key: l.key })} className="rounded-lg border border-[#e8c36a] px-2 py-1 text-[11px] text-[#e8c36a]">
+                    {busy === `loc-ref-${l.id}` ? "Génération…" : "Régénérer la ref"}
+                  </button>
+                ) : null}
+              </div>
               <p className="mt-2 text-sm text-[#9aa3b2]">{l.look}</p>
             </article>
           ))}
           {(bible?.props ?? []).map((p) => (
             <article key={`prop-${p.id}`} className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
-              <p className="font-medium">{p.name}</p>
-              <p className="text-xs text-[#e8c36a]">Objet / accessoire</p>
+              <div className="flex items-start justify-between gap-3">
+                <div><p className="font-medium">{p.name}</p><p className="text-xs text-[#e8c36a]">Objet / accessoire</p></div>
+                {bible?.locked ? (
+                  <button onClick={() => run(`prop-ref-${p.id}`, `/api/projects/${project.id}/regenerate-reference/`, { entity_type: "prop", entity_key: p.key })} className="rounded-lg border border-[#e8c36a] px-2 py-1 text-[11px] text-[#e8c36a]">
+                    {busy === `prop-ref-${p.id}` ? "Génération…" : "Régénérer la ref"}
+                  </button>
+                ) : null}
+              </div>
               <p className="mt-2 text-sm text-[#9aa3b2]">{p.look}</p>
             </article>
           ))}
