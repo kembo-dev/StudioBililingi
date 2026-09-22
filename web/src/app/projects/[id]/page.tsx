@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { api } from "@/lib/api";
+import { api, mediaUrl } from "@/lib/api";
 
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
@@ -131,6 +131,34 @@ export default function ProjectPage() {
             </article>
           ))}
         </div>
+      </section>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl">Assets visuels</h2>
+          <span className="text-xs text-[#9aa3b2]">{project.refs?.length ?? 0} référence(s)</span>
+        </div>
+        {project.refs?.length ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {project.refs.map((ref) => (
+              <article key={ref.id} className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#14161c]">
+                <img
+                  src={mediaUrl(ref.uri)}
+                  alt={ref.meta?.name ?? ref.meta?.key ?? ref.role}
+                  className="aspect-video w-full bg-[#0b0c10] object-cover"
+                />
+                <div className="p-3">
+                  <p className="font-medium">{ref.meta?.name ?? ref.meta?.key ?? "Référence"}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[#e8c36a]">{ref.role.replaceAll("_", " ")}</p>
+                  <p className="mt-1 truncate text-xs text-[#9aa3b2]">{ref.provider || "provider inconnu"}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-[#2a2e38] p-4 text-sm text-[#9aa3b2]">
+            Aucune référence visuelle enregistrée pour ce projet.
+          </p>
+        )}
       </section>
       <section className="space-y-4">
         <h2 className="text-xl">Épisodes</h2>
