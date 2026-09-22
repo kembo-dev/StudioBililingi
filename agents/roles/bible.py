@@ -9,7 +9,7 @@ class WorldBibleAgent:
     def __init__(self):
         self.text = get_text()
 
-    def draft(self, concept: str, *, delivery: str = "storytell") -> dict:
+    def draft(self, concept: str, *, delivery: str = "storytell", project_constraints: dict | None = None) -> dict:
         conversation_rule = (
             "MODE CONVERSATION: la bible doit rendre possibles de vrais échanges dramatiques. "
             "Nomme le protagoniste avec un vrai nom propre, jamais un intitulé générique comme Designer Parisien. "
@@ -34,7 +34,8 @@ class WorldBibleAgent:
                 "qui sera utilisé dans tous les scripts, et aliases contenant les variantes utiles de ce même nom. "
                 "N'utilise pas protag, protagoniste, hero, mentor, autre ou antag comme id si un vrai nom est disponible. "
                 f"{conversation_rule}"
+                "Les CONTRAINTES PROJET sont canoniques. Le genre et sous-genre guident l'atmosphère sans inventer une autre intrigue. Le cadre principal fixe la géographie et la culture: n'occidentalise pas, ne déplace pas la ville/pays et rends les lieux cohérents avec ce cadre. La durée et le nombre d'épisodes sont des contraintes de production, pas une permission d'ajouter du remplissage. "
                 "Les rôles, looks, voix, lieux et objets doivent être spécifiques à cette histoire."
             ),
-            user=f"MODE DE LIVRAISON: {delivery}\n\nCONCEPT:\n{concept}",
+            user=f"MODE DE LIVRAISON: {delivery}\n\nCONTRAINTES PROJET:\n{project_constraints or {}}\n\nCONCEPT:\n{concept}",
         )
