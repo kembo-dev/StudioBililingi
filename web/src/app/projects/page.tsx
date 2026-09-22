@@ -6,6 +6,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
 type Project = { id: number; title: string; slug: string; concept: string; status: string };
+type ConceptSuggestion = {
+  title: string; concept: string; genre: string; tone: string; story_type: string;
+  recommended_episode_count: number; events: string[]; ending_intent: string;
+};
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -15,6 +19,13 @@ export default function ProjectsPage() {
   const [visualStyle, setVisualStyle] = useState("realistic");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [conceptMode, setConceptMode] = useState<"manual" | "ai">("manual");
+  const [idea, setIdea] = useState("");
+  const [assistBusy, setAssistBusy] = useState(false);
+  const [suggestion, setSuggestion] = useState<ConceptSuggestion | null>(null);
+  const [genre, setGenre] = useState("");
+  const [tone, setTone] = useState("");
+  const [endingIntent, setEndingIntent] = useState("");
 
   async function load() {
     setProjects(await api<Project[]>("/api/projects/"));
@@ -31,7 +42,7 @@ export default function ProjectsPage() {
     try {
       const project = await api<Project>("/api/projects/", {
         method: "POST",
-        body: JSON.stringify({ title, concept, delivery, visual_style: visualStyle }),
+        body: JSON.stringify({ title, concept, genre, tone, ending_intent: endingIntent, delivery, visual_style: visualStyle }),
       });
       window.location.href = `/projects/${project.id}`;
     } catch (err) {
@@ -52,8 +63,43 @@ export default function ProjectsPage() {
           Titre
           <input className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white outline-none" placeholder="L’Appel de 03h14" value={title} onChange={(e) => setTitle(e.target.value)} required />
         </label>
+        <div>
+          <p className="mb-2 text-sm font-medium text-[#e8c36a]">Création du concept</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setConceptMode("manual")} className={conceptMode === "manual" ? "rounded-lg bg-[#e8c36a] px-3 py-2 text-sm font-medium text-[#0b0c10]" : "rounded-lg border border-[#2a2e38] px-3 py-2 text-sm text-[#9aa3b2]"}>Écrire moi-même</button>
+            <button type="button" onClick={() => setConceptMode("ai")} className={conceptMode === "ai" ? "rounded-lg bg-[#e8c36a] px-3 py-2 text-sm font-medium text-[#0b0c10]" : "rounded-lg border border-[#2a2e38] px-3 py-2 text-sm text-[#9aa3b2]"}>✨ M'aider avec l'IA</button>
+          </div>
+        </div>
+        {conceptMode === "ai" ? (
+          <div className="space-y-3 rounded-xl border border-[#2a2e38] bg-[#0b0c10] p-4">
+            <label className="block text-xs text-[#9aa3b2]">
+              Ton idée de départ
+              <textarea className="mt-1 min-h-24 w-full rounded-lg border border-[#2a2e38] bg-[#14161c] px-3 py-2 text-sm text-white outline-none" placeholder="Ex. Un enfant joyeux se prépare, marche vers l'école et salue les personnes qu'il rencontre." value={idea} onChange={(e) => setIdea(e.target.value)} />
+            </label>
+            <button type="button" disabled={assistBusy || !idea.trim()} onClick={async () => {
+              setAssistBusy(true); setError("");
+              try {
+                const result = await api<ConceptSuggestion>("/api/projects/assist-concept/", { method: "POST", body: JSON.stringify({ idea, delivery }) });
+                setSuggestion(result);
+              } catch (err) { setError(String(err)); } finally { setAssistBusy(false); }
+            }} className="rounded-lg border border-[#e8c36a] px-4 py-2 text-sm text-[#e8c36a] disabled:opacity-50">
+              {assistBusy ? "Analyse de l'idée…" : suggestion ? "✨ Proposer une autre version" : "✨ Développer avec l'IA"}
+            </button>
+            {suggestion ? (
+              <div className="space-y-3 rounded-lg border border-[#2a2e38] bg-[#14161c] p-4 text-sm">
+                <div className="flex items-start justify-between gap-3"><div><p className="font-medium">{suggestion.title || "Proposition"}</p><p className="text-xs text-[#9aa3b2]">{suggestion.genre || "Genre libre"} · {suggestion.tone || "Ton libre"} · {suggestion.recommended_episode_count} épisode(s) recommandé(s)</p></div><span className="rounded-full border border-[#2a2e38] px-2 py-1 text-[10px] uppercase text-[#9aa3b2]">{suggestion.story_type || "story"}</span></div>
+                <p className="text-[#d7dbe3]">{suggestion.concept}</p>
+                {suggestion.events.length ? <ol className="list-decimal space-y-1 pl-5 text-xs text-[#9aa3b2]">{suggestion.events.map((event, index) => <li key={index}>{event}</li>)}</ol> : null}
+                <button type="button" onClick={() => {
+                  setTitle(suggestion.title || title); setConcept(suggestion.concept);
+                  setGenre(suggestion.genre); setTone(suggestion.tone); setEndingIntent(suggestion.ending_intent);
+                }} className="rounded-lg bg-[#e8c36a] px-4 py-2 text-sm font-medium text-[#0b0c10]">✓ Utiliser ce concept</button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <label className="block text-xs text-[#9aa3b2]">
-          Concept
+          Concept {conceptMode === "ai" ? "retenu (modifiable)" : ""}
           <textarea className="mt-1 min-h-28 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white outline-none" placeholder="Genre / Concept / Début / Fin" value={concept} onChange={(e) => setConcept(e.target.value)} required />
         </label>
         <div>
