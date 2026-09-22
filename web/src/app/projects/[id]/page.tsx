@@ -37,6 +37,7 @@ type Project = {
   title: string;
   concept: string;
   delivery: string;
+  visual_style: string;
   refs?: Ref[];
   bibles: { id: number; version: number; locked: boolean; characters: Character[]; locations: Location[] }[];
   seasons: { id: number; episodes: Episode[] }[];
@@ -86,7 +87,7 @@ export default function ProjectPage() {
         <div>
           <h1 className="text-3xl font-semibold">{project.title}</h1>
           <p className="mt-2 text-[#9aa3b2]">{project.concept}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8c36a]">Mode · {project.delivery}</p>
+          <p className="mt-1 text-xs uppercase tracking-[0.15em] text-[#e8c36a]">Mode · {project.delivery} · Style · {project.visual_style.replaceAll("_", " ")}</p>
         </div>
         <button
           className="text-xs text-red-400"
