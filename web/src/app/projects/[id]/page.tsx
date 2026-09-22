@@ -11,6 +11,7 @@ type Scene = { id: number; index: number; heading: string; summary: string; time
 type Beat = {
   id: number;
   scene_id?: number | null;
+  narrative_event_id?: number | null;
   index: number;
   text: string;
   word_count: number;
@@ -34,6 +35,8 @@ type Location = { id: number; key: string; name: string; look: string };
 type Prop = { id: number; key: string; name: string; look: string; story_function?: string };
 type Ref = { id: number; role: string; uri: string; provider?: string; meta?: { name?: string; key?: string; entity?: string; custom_prompt?: string } };
 type Job = { id: number; kind: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; error?: string; result?: Record<string, unknown> };
+type NarrativeEvent = { key: string; position: number; description: string; episode_number: number; status: string };
+type NarrativeContract = { point_of_view: string; narrator: string; tense: string; story_type: string; recommended_episode_count: number; locked: boolean; events: NarrativeEvent[] };
 type Project = {
   id: number;
   title: string;
@@ -41,6 +44,7 @@ type Project = {
   delivery: string;
   visual_style: string;
   refs?: Ref[];
+  narrative_contract?: NarrativeContract | null;
   bibles: { id: number; version: number; locked: boolean; characters: Character[]; locations: Location[]; props: Prop[] }[];
   seasons: { id: number; episodes: Episode[] }[];
 };
@@ -306,6 +310,26 @@ export default function ProjectPage() {
           </p>
         )}
       </section>
+      {project.narrative_contract ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl">Contrat narratif</h2>
+            <span className="rounded-full border border-[#2a2e38] px-2 py-1 text-xs text-[#9aa3b2]">{project.narrative_contract.locked ? "verrouillé" : "brouillon"}</span>
+          </div>
+          <div className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
+            <p className="text-sm text-[#9aa3b2]">POV · {project.narrative_contract.point_of_view} · Narrateur · {project.narrative_contract.narrator} · Temps · {project.narrative_contract.tense} · {project.narrative_contract.recommended_episode_count} épisode(s)</p>
+            <ol className="mt-3 space-y-2">
+              {project.narrative_contract.events.map((event) => (
+                <li key={event.key} className="flex gap-3 rounded-lg bg-[#0b0c10] px-3 py-2 text-sm">
+                  <span className="shrink-0 font-medium text-[#e8c36a]">{event.key}</span>
+                  <span className="min-w-0 flex-1">{event.description}</span>
+                  <span className="shrink-0 text-xs text-[#9aa3b2]">E{event.episode_number} · {event.status}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+      ) : null}
       <section className="space-y-4">
         <h2 className="text-xl">Épisodes</h2>
         {episodes.map((ep) => (
