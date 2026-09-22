@@ -10,6 +10,7 @@ def generate_refs(project: Project) -> list:
     from agents.roles.art_director import ArtDirector
 
     artist = ArtDirector()
+    project_key = f"{project.id}-{project.slug}"
     created = []
 
     def existing(role: str, key: str):
@@ -36,7 +37,7 @@ def generate_refs(project: Project) -> list:
             continue
         save(
             Asset.Role.CHARACTER_REF,
-            artist.character_ref(name=char.name, look=char.look, role=char.role),
+            artist.character_ref(name=char.name, look=char.look, role=char.role, project_key=project_key),
             {"key": char.key, "name": char.name, "entity": "character"},
         )
     for loc in project.locations.all():
@@ -44,7 +45,7 @@ def generate_refs(project: Project) -> list:
             continue
         save(
             Asset.Role.LOCATION_REF,
-            artist.location_ref(name=loc.name, look=loc.look, time_of_day=loc.time_of_day),
+            artist.location_ref(name=loc.name, look=loc.look, time_of_day=loc.time_of_day, project_key=project_key),
             {"key": loc.key, "name": loc.name, "entity": "location"},
         )
     for prop in project.props.all():
@@ -52,7 +53,7 @@ def generate_refs(project: Project) -> list:
             continue
         save(
             Asset.Role.PROP_REF,
-            artist.prop_ref(name=prop.name, look=prop.look),
+            artist.prop_ref(name=prop.name, look=prop.look, project_key=project_key),
             {"key": prop.key, "name": prop.name, "entity": "prop"},
         )
     return created
