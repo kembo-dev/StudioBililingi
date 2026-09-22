@@ -15,9 +15,12 @@ class BeatSegmenter:
     def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None, feedback: str = "") -> dict:
         mode_rules = {
             "conversation": (
-                "CONVERSATION: chaque parole doit être explicitement attribuée. Dans text ET dialogue, écris toujours "
-                "NOM_DU_PERSONNAGE : réplique; jamais une réplique anonyme. Si deux personnes parlent dans le même beat, "
-                "garde chaque nom devant sa propre réplique. Ne transforme jamais le dialogue en narration. "
+                "CONVERSATION: chaque beat contenant une parole doit fournir speaker_id avec l'id CANONIQUE exact "
+                "du personnage qui parle, présent dans la bible. Dans text ET dialogue, écris aussi "
+                "NOM_DU_PERSONNAGE : réplique; jamais une réplique anonyme. character_ids désigne tous les personnages "
+                "visibles, tandis que speaker_id désigne uniquement le locuteur principal. Si plusieurs personnages "
+                "parlent, crée des beats distincts à une pause naturelle afin qu'un beat ait au maximum un speaker_id. "
+                "Ne transforme jamais le dialogue en narration. "
                 "Fusionne une micro-réplique avec l'action ou la réaction visuelle adjacente dans la même scène."
             ),
             "voix_off": "VOIX OFF: conserve explicitement la voix off dans dialogue et décris séparément l'image.",
@@ -38,7 +41,7 @@ class BeatSegmenter:
                 "action ou réaction visible pour chaque partie. Respecte les changements de scène, de lieu, de locuteur "
                 "et d'action. Retourne JSON {\"beats\": [...]} uniquement. Chaque beat doit fournir: "
                 "text, scene_index, scene_heading, scene_summary, location_id, time_of_day, lighting, "
-                "character_ids, prop_ids, camera {shot_size, angle, move, lens}, emotion, dialogue, "
+                "character_ids, speaker_id, prop_ids, camera {shot_size, angle, move, lens}, emotion, dialogue, "
                 "continuity, duration_seconds, video_prompt, negative_prompt, backend. "
                 "Utilise uniquement les ids de personnages/lieux/objets présents dans la bible quand ils existent. "
                 "video_prompt décrit exactement ce qui doit être visible à l'écran, qui parle, la réaction visible "
