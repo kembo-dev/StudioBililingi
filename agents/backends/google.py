@@ -88,6 +88,31 @@ def _usable(uri: str | None) -> bool:
     return bool(uri) and uri.startswith(("http://", "https://", "gs://", "/media/"))
 
 
+def _local_media_path(uri: str | None) -> Path | None:
+    if not uri or not str(uri).startswith("/media/"):
+        return None
+    relative = str(uri)[len("/media/"):]
+    path = (_media_root() / relative).resolve()
+    root = _media_root().resolve()
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return None
+    return path if path.exists() else None
+
+
+def _video_reference_image(types, uri: str):
+    """Convert a Studio asset URI into a real GenAI Image object."""
+    local = _local_media_path(uri)
+    if local:
+        return types.Image.from_file(location=str(local))
+    if str(uri).startswith("gs://"):
+        import mimetypes
+        mime = mimetypes.guess_type(str(uri))[0] or "image/png"
+        return types.Image(gcs_uri=str(uri), mime_type=mime)
+    return None
+
+
 class GoogleTextBackend:
     provider_id = "google-gemini"
 
@@ -175,27 +200,62 @@ class GoogleVideoBackend:
         model = os.getenv("VEO_MODEL", "veo-3.1-generate-001")
         usable = [uri for uri in (ingredients or []) if _usable(uri)]
         text = prompt
-        if _usable(start_frame):
-            text += f"\nStart frame / location plate: {start_frame}"
-        if _usable(end_frame):
-            text += f"\nEnd frame target: {end_frame}"
-        if usable:
-            text += "\nVisual ingredients (keep identity): " + ", ".join(usable)
 
-        config_kwargs = {"aspect_ratio": aspect_ratio}
-        # Veo accepts a small discrete set of durations. Keep the requested
-        # beat duration when the installed SDK exposes duration_seconds.
+        # Real visual conditioning: pass Studio refs to Veo as reference images
+        # instead of merely mentioning their filesystem URI in the prompt.
+        reference_images = []
+        for uri in usable[:3]:
+            image = _video_reference_image(types, uri)
+            if image is not None:
+                reference_images.append(
+                    types.VideoGenerationReferenceImage(
+                        image=image,
+                        reference_type="asset",
+                    )
+                )
+
+        start_image = _video_reference_image(types, start_frame) if _usable(start_frame) else None
+        end_image = _video_reference_image(types, end_frame) if _usable(end_frame) else None
+
+        config_kwargs = {"aspect_ratio": aspect_ratio, "number_of_videos": 1}
         requested_duration = max(4, min(8, int(round(float(duration_seconds or 8)))))
         config_kwargs["duration_seconds"] = requested_duration
+
+        # Veo reference-images mode cannot be mixed with image/last-frame mode.
+        if reference_images:
+            config_kwargs["reference_images"] = reference_images
+        elif end_image is not None:
+            config_kwargs["last_frame"] = end_image
+
         try:
             config = types.GenerateVideosConfig(**config_kwargs)
         except (TypeError, ValueError):
+            # Keep compatibility with older installed SDKs.
             config_kwargs.pop("duration_seconds", None)
+            config_kwargs.pop("reference_images", None)
+            config_kwargs.pop("last_frame", None)
             config = types.GenerateVideosConfig(**config_kwargs)
 
         client = _client()
         try:
-            kwargs = {"model": model, "prompt": text, "config": config}
+            if reference_images:
+                kwargs = {
+                    "model": model,
+                    "source": types.GenerateVideosSource(prompt=text),
+                    "config": config,
+                }
+            elif start_image is not None:
+                kwargs = {
+                    "model": model,
+                    "source": types.GenerateVideosSource(prompt=text, image=start_image),
+                    "config": config,
+                }
+            else:
+                kwargs = {
+                    "model": model,
+                    "source": types.GenerateVideosSource(prompt=text),
+                    "config": config,
+                }
             operation = _with_quota_retry(lambda: client.models.generate_videos(**kwargs))
             timeout = int(os.getenv("VEO_TIMEOUT_SECONDS", "600"))
             started = time.time()
