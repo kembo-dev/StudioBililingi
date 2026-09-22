@@ -1,7 +1,7 @@
 from django.db import models
 
 from apps.bible.models import Character, Location, Prop
-from apps.projects.models import Season
+from apps.projects.models import NarrativeEvent, Season
 
 
 class Episode(models.Model):
@@ -90,6 +90,14 @@ class Beat(models.Model):
         blank=True,
         related_name="spoken_beats",
         help_text="Canonical character speaking in this beat.",
+    )
+    narrative_event = models.ForeignKey(
+        NarrativeEvent,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="beats",
+        help_text="Canonical narrative event advanced by this beat.",
     )
     video_prompt = models.TextField(blank=True)
     negative_prompt = models.TextField(blank=True)
