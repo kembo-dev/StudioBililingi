@@ -1,3 +1,8 @@
+from pathlib import Path
+
+from django.conf import settings
+from django.db import transaction
+
 from apps.production.models import Asset
 from apps.projects.models import Project
 
@@ -79,16 +84,43 @@ def regenerate_character_ref(project: Project, character_key: str):
         role=character.role,
         project_key=project_key,
     )
-    return Asset.objects.create(
-        project=project,
-        kind=Asset.Kind.IMAGE,
-        role=Asset.Role.CHARACTER_REF,
-        uri=uri,
-        provider=getattr(artist.image, "provider_id", ""),
-        meta={
-            "key": character.key,
-            "name": character.name,
-            "entity": "character",
-            "regenerated": True,
-        },
+    old_assets = list(
+        Asset.objects.filter(
+            project=project,
+            role=Asset.Role.CHARACTER_REF,
+            meta__key=character.key,
+        )
     )
+    old_uris = [asset.uri for asset in old_assets]
+
+    with transaction.atomic():
+        Asset.objects.filter(pk__in=[asset.pk for asset in old_assets]).delete()
+        asset = Asset.objects.create(
+            project=project,
+            kind=Asset.Kind.IMAGE,
+            role=Asset.Role.CHARACTER_REF,
+            uri=uri,
+            provider=getattr(artist.image, "provider_id", ""),
+            meta={
+                "key": character.key,
+                "name": character.name,
+                "entity": "character",
+                "regenerated": True,
+            },
+        )
+
+    # Remove obsolete local files only after the replacement is committed.
+    media_root = Path(getattr(settings, "MEDIA_ROOT", "") or "").resolve()
+    for old_uri in old_uris:
+        if not old_uri or old_uri == uri or not str(old_uri).startswith("/media/"):
+            continue
+        candidate = (media_root / str(old_uri)[len("/media/"):]).resolve()
+        try:
+            candidate.relative_to(media_root)
+        except ValueError:
+            continue
+        try:
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return asset
