@@ -87,6 +87,16 @@ class CharacterResolver:
             resolved = ResolvedCharacter(character.key, character.name)
             values = [character.key, character.name, character.name.upper()]
             values.extend(aliases_by_key.get(character.key, []))
+            # Dialogue models often emit a title + canonical name (e.g.
+            # "DR. LÉO DUBOIS") while the bible stores "Léo Dubois".
+            # Index safe honorific variants instead of treating them as new identities.
+            for value in list(values):
+                clean = str(value or "").strip()
+                if clean:
+                    values.extend([
+                        f"Dr {clean}", f"Dr. {clean}", f"Docteur {clean}",
+                        f"M. {clean}", f"Mme {clean}",
+                    ])
             for value in values:
                 token = identity_token(value)
                 if token:
