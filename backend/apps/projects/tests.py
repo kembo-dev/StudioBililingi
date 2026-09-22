@@ -1,6 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 
 from django.test import TestCase
 
@@ -440,4 +440,28 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(len(beat.backend), Beat._meta.get_field("backend").max_length)
         self.assertEqual(len(beat.scene.heading), Scene._meta.get_field("heading").max_length)
         self.assertEqual(len(beat.scene.time_of_day), Scene._meta.get_field("time_of_day").max_length)
+
+    def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
+        before_scripts = Script.objects.filter(episode=self.episode).count()
+        before_beats = Beat.objects.filter(episode=self.episode).count()
+        before_scenes = self.episode.scenes.count()
+        original_create = Beat.objects.create
+        calls = {"count": 0}
+
+        def fail_on_second_beat(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] == 2:
+                raise RuntimeError("simulated persistence failure")
+            return original_create(*args, **kwargs)
+
+        with patch.object(Beat.objects, "create", side_effect=fail_on_second_beat):
+            with self.assertRaisesMessage(RuntimeError, "simulated persistence failure"):
+                persist_beats(self.episode, [
+                    {"text": "Premier beat valide", "scene_index": 1},
+                    {"text": "Deuxieme beat qui echoue", "scene_index": 2},
+                ])
+
+        self.assertEqual(Script.objects.filter(episode=self.episode).count(), before_scripts)
+        self.assertEqual(Beat.objects.filter(episode=self.episode).count(), before_beats)
+        self.assertEqual(self.episode.scenes.count(), before_scenes)
 
