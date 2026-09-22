@@ -20,7 +20,9 @@ class BeatSegmenter:
                 "NOM_DU_PERSONNAGE : réplique; jamais une réplique anonyme. character_ids désigne tous les personnages "
                 "visibles, tandis que speaker_id désigne uniquement le locuteur principal. Si plusieurs personnages "
                 "parlent, crée des beats distincts à une pause naturelle afin qu'un beat ait au maximum un speaker_id. "
-                "Ne transforme jamais le dialogue en narration. "
+                "Ne transforme jamais le dialogue en narration. Ne coupe JAMAIS une phrase ou une réplique au milieu: "
+                "chaque beat doit se terminer à une vraie fin de phrase ou à une pause de dialogue grammaticalement complète. "
+                "Si une phrase dépasse la limite, réécris-la en plusieurs phrases naturelles avant de créer les beats. "
                 "Fusionne une micro-réplique avec l'action ou la réaction visuelle adjacente dans la même scène."
             ),
             "voix_off": "VOIX OFF: conserve explicitement la voix off dans dialogue et décris séparément l'image.",
@@ -35,7 +37,8 @@ class BeatSegmenter:
                 "ou une phrase de quelques mots: fusionne-la avec l'action, la réaction ou la réplique adjacente dans "
                 "la même scène. La cible de production est 24 mots par beat. Pour chaque beat, vise 20 à 28 mots; "
                 "ne dépasse jamais 32 mots. Si le contenu dépasse 32 mots, crée plusieurs beats en conservant le même "
-                "scene_index et la continuité. Un beat de moins de 12 mots doit être fusionné avec un voisin compatible, "
+                "scene_index et la continuité, mais jamais en coupant une phrase existante au milieu. "
+                "Un beat de moins de 12 mots doit être fusionné avec un voisin compatible, "
                 "sauf silence/action visuelle qui remplit réellement 6 à 8 secondes. Une longue réplique doit être "
                 "découpée à une pause naturelle avec une "
                 "action ou réaction visible pour chaque partie. Respecte les changements de scène, de lieu, de locuteur "
