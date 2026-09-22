@@ -483,7 +483,11 @@ def _validate_episode_plan(rows: list[dict]) -> list[str]:
 def run_showrunner(project: Project) -> dict:
     try:
         from agents.roles.showrunner import Showrunner
-        raw = Showrunner().plan(project.concept, delivery=project.delivery)
+        contract = narrative_contract_payload(project)
+        raw = Showrunner().plan(
+            project.concept + ("\n\nNARRATIVE CONTRACT VERROUILLE:\n" + str(contract) if contract else ""),
+            delivery=project.delivery,
+        )
     except Exception as exc:
         raw = {"_error": str(exc)}
     if raw.get("tone") and not project.tone:
@@ -609,6 +613,7 @@ def write_script(episode: Episode) -> Script:
             episode={"number": episode.number, "title": episode.title, "logline": episode.logline},
             form=project.delivery,
             continuity=_canonical_continuity(episode),
+            narrative_contract=narrative_contract_payload(project),
         )
     except Exception as exc:
         raise RuntimeError(f"L'écriture du script a échoué: {exc}") from exc
