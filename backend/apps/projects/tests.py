@@ -425,3 +425,19 @@ class ProductionPipelineTests(TestCase):
         self.assertTrue(any("chloe" in error for error in readiness["errors"]))
         self.assertTrue(any("cuisine" in error for error in readiness["errors"]))
 
+    def test_persist_beats_bounds_compact_generated_fields(self):
+        long_value = "x" * 500
+        beat = persist_beats(self.episode, [{
+            "text": "Une action visuelle simple pour tester les limites de stockage du beat.",
+            "scene_index": 1,
+            "scene_heading": long_value,
+            "time_of_day": long_value,
+            "emotion": long_value,
+            "backend": long_value,
+        }])[0]
+        beat.refresh_from_db()
+        self.assertEqual(len(beat.emotion), Beat._meta.get_field("emotion").max_length)
+        self.assertEqual(len(beat.backend), Beat._meta.get_field("backend").max_length)
+        self.assertEqual(len(beat.scene.heading), Scene._meta.get_field("heading").max_length)
+        self.assertEqual(len(beat.scene.time_of_day), Scene._meta.get_field("time_of_day").max_length)
+
