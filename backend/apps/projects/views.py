@@ -78,6 +78,26 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data)
 
+    @action(detail=True, methods=["post"], url_path="regenerate-character-ref")
+    def regenerate_character_ref_action(self, request, pk=None):
+        from apps.projects.visuals import regenerate_character_ref
+
+        project = self.get_object()
+        character_key = str(request.data.get("character_key") or "").strip()
+        if not character_key:
+            return Response({"detail": "character_key est requis"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            asset = regenerate_character_ref(project, character_key)
+        except (ValueError, RuntimeError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            "id": asset.id,
+            "role": asset.role,
+            "uri": asset.uri,
+            "provider": asset.provider,
+            "meta": asset.meta,
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"], url_path="generate-refs")
     def generate_refs_action(self, request, pk=None):
         from apps.jobs.models import Job
