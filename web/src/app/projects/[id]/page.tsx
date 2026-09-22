@@ -29,7 +29,7 @@ type Episode = {
   beats: Beat[];
   scenes: Scene[];
 };
-type Character = { id: number; name: string; role: string; look: string };
+type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; name: string; look: string };
 type Ref = { id: number; role: string; uri: string; provider?: string; meta?: { name?: string; key?: string } };
 type Project = {
@@ -119,8 +119,24 @@ export default function ProjectPage() {
         <div className="grid gap-3 sm:grid-cols-2">
           {(bible?.characters ?? []).map((c) => (
             <article key={c.id} className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
-              <p className="font-medium">{c.name}</p>
-              <p className="text-xs text-[#e8c36a]">{c.role}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">{c.name}</p>
+                  <p className="text-xs text-[#e8c36a]">{c.role}</p>
+                </div>
+                {bible?.locked ? (
+                  <button
+                    onClick={() => run(
+                      `char-ref-${c.id}`,
+                      `/api/projects/${project.id}/regenerate-character-ref/`,
+                      { character_key: c.key },
+                    )}
+                    className="rounded-lg border border-[#e8c36a] px-2 py-1 text-[11px] text-[#e8c36a]"
+                  >
+                    {busy === `char-ref-${c.id}` ? "Génération…" : "Régénérer la ref"}
+                  </button>
+                ) : null}
+              </div>
               <p className="mt-2 text-sm text-[#9aa3b2]">{c.look}</p>
             </article>
           ))}
