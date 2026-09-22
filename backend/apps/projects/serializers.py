@@ -3,7 +3,7 @@ from rest_framework import serializers
 from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
-from apps.story.models import Beat, BeatTake, Episode, Scene, Script
+from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -71,14 +71,21 @@ class SceneSerializer(serializers.ModelSerializer):
         fields = ("id", "script_id", "index", "heading", "summary", "location_id", "time_of_day", "lighting", "continuity_state")
 
 
+class ScenePlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScenePlan
+        fields = ("id", "version", "payload", "locked", "created_at")
+
+
 class EpisodeSerializer(serializers.ModelSerializer):
     beats = serializers.SerializerMethodField()
     scenes = serializers.SerializerMethodField()
     latest_script = serializers.SerializerMethodField()
+    scene_plans = serializers.SerializerMethodField()
 
     class Meta:
         model = Episode
-        fields = ("id", "number", "title", "logline", "function_in_arc", "status", "beats", "scenes", "latest_script")
+        fields = ("id", "number", "title", "logline", "function_in_arc", "status", "beats", "scenes", "latest_script", "scene_plans")
 
     def _latest(self, obj):
         return obj.scripts.order_by("-version").first()
@@ -90,6 +97,10 @@ class EpisodeSerializer(serializers.ModelSerializer):
     def get_scenes(self, obj):
         script = self._latest(obj)
         return SceneSerializer(script.scenes.order_by("index"), many=True).data if script else []
+
+    def get_scene_plans(self, obj):
+        script = self._latest(obj)
+        return ScenePlanSerializer(script.scene_plans.order_by("-version"), many=True).data if script else []
 
     def get_latest_script(self, obj):
         script = obj.scripts.order_by("-version").first()
