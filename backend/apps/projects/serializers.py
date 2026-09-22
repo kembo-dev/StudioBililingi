@@ -126,7 +126,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "delivery", "visual_style", "status", "created_at", "narrative_contract", "seasons", "bibles", "refs")
+        fields = ("id", "title", "slug", "concept", "genre", "subgenre", "setting", "tone", "ending_intent", "episode_count_target", "episode_duration_seconds", "aspect_ratio", "delivery", "visual_style", "status", "created_at", "narrative_contract", "seasons", "bibles", "refs")
         read_only_fields = ("slug", "status", "created_at")
 
     def get_refs(self, obj):
@@ -142,6 +142,10 @@ class ProjectCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=200)
     concept = serializers.CharField()
     genre = serializers.CharField(required=False, allow_blank=True, default="")
+    subgenre = serializers.CharField(required=False, allow_blank=True, default="")
+    setting = serializers.CharField(required=False, allow_blank=True, default="")
+    episode_count_target = serializers.IntegerField(required=False, allow_null=True, min_value=1, max_value=50, default=None)
+    episode_duration_seconds = serializers.IntegerField(required=False, min_value=15, max_value=1800, default=60)
     tone = serializers.CharField(required=False, allow_blank=True, default="")
     ending_intent = serializers.CharField(required=False, allow_blank=True, default="")
     delivery = serializers.ChoiceField(choices=("storytell", "voix_off", "conversation", "rencontre"), required=False, default="storytell")
