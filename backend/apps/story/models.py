@@ -83,6 +83,14 @@ class Beat(models.Model):
     continuity = models.JSONField(default=dict)
     emotion = models.CharField(max_length=80, blank=True)
     dialogue = models.TextField(blank=True)
+    speaker = models.ForeignKey(
+        Character,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="spoken_beats",
+        help_text="Canonical character speaking in this beat.",
+    )
     video_prompt = models.TextField(blank=True)
     negative_prompt = models.TextField(blank=True)
     backend = models.CharField(max_length=64, default="google-veo-3.1")
