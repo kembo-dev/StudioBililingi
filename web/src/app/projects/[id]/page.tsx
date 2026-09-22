@@ -33,6 +33,7 @@ type Character = { id: number; key: string; name: string; role: string; look: st
 type Location = { id: number; key: string; name: string; look: string };
 type Prop = { id: number; key: string; name: string; look: string; story_function?: string };
 type Ref = { id: number; role: string; uri: string; provider?: string; meta?: { name?: string; key?: string } };
+type Job = { id: number; kind: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; error?: string; result?: Record<string, unknown> };
 type Project = {
   id: number;
   title: string;
@@ -53,6 +54,8 @@ export default function ProjectPage() {
   const [previewRef, setPreviewRef] = useState<Ref | null>(null);
   const [showAddRef, setShowAddRef] = useState(false);
   const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
+  const [refJob, setRefJob] = useState<Job | null>(null);
+  const [refNotice, setRefNotice] = useState("");
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
@@ -61,6 +64,39 @@ export default function ProjectPage() {
   useEffect(() => {
     load().catch((err) => setError(String(err)));
   }, [params.id]);
+
+  async function generateRefsWithProgress() {
+    setBusy("refs");
+    setError("");
+    setRefNotice("Préparation de la génération…");
+    try {
+      const response = await api<{ job_id: number; status: Job["status"] }>(`/api/projects/${project?.id}/generate-refs/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      let job = await api<Job>(`/api/jobs/${response.job_id}/`);
+      setRefJob(job);
+      while (job.status === "queued" || job.status === "running") {
+        setRefNotice(job.status === "queued" ? (job.error || "Génération en file d’attente…") : "Génération des références en cours…");
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        job = await api<Job>(`/api/jobs/${response.job_id}/`);
+        setRefJob(job);
+        await load();
+      }
+      await load();
+      if (job.status === "succeeded") {
+        setRefNotice("Références générées avec succès.");
+      } else {
+        setRefNotice("");
+        setError(job.error || "La génération des références a échoué.");
+      }
+    } catch (err) {
+      setRefNotice("");
+      setError(String(err));
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function run(key: string, path: string, body: object = {}) {
     setBusy(key);
@@ -119,7 +155,7 @@ export default function ProjectPage() {
             {bible?.locked ? (
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowAddRef((v) => !v)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs">{showAddRef ? "Annuler" : "+ Ajouter une ref"}</button>
-                <button onClick={() => run("refs", `/api/projects/${project.id}/generate-refs/`)} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a]">{busy === "refs" ? "\u2026" : "Générer les refs"}</button>
+                <button disabled={busy === "refs"} onClick={generateRefsWithProgress} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a] disabled:opacity-50">{busy === "refs" ? "Génération…" : "Générer les refs"}</button>
               </div>
             ) : null}
           </div>
@@ -202,6 +238,17 @@ export default function ProjectPage() {
           <h2 className="text-xl">Assets visuels</h2>
           <span className="text-xs text-[#9aa3b2]">{project.refs?.length ?? 0} référence(s)</span>
         </div>
+        {(busy === "refs" || refNotice) ? (
+          <div className="rounded-xl border border-[#e8c36a]/40 bg-[#14161c] p-4">
+            <div className="flex items-center gap-3">
+              {busy === "refs" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#e8c36a] border-t-transparent" /> : <span className="text-green-400">✓</span>}
+              <div>
+                <p className="text-sm font-medium">{refNotice || "Génération en cours…"}</p>
+                {refJob ? <p className="mt-1 text-xs text-[#9aa3b2]">Job #{refJob.id} · {refJob.status} · les nouvelles images apparaissent automatiquement ci-dessous.</p> : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
         {project.refs?.length ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {project.refs.map((ref) => (
