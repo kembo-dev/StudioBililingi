@@ -517,8 +517,29 @@ def run_showrunner(project: Project) -> dict:
     if plan_errors:
         raise RuntimeError("Plan de saison incohérent: " + "; ".join(plan_errors))
     episodes = persist_episodes(project, rows)
-    # Keep the structured event ledger in the successful planning job/result path
-    # by attaching it to the return contract; screenwriting receives it below.
+    try:
+        contract = project.narrative_contract
+    except NarrativeContract.DoesNotExist:
+        contract = None
+    if contract:
+        planned = []
+        position = 1
+        for row in rows:
+            for description in row.get("events") or []:
+                planned.append(NarrativeEvent(
+                    contract=contract,
+                    key=f"EV{position:02d}",
+                    position=position,
+                    description=description,
+                    episode_number=row["number"],
+                    status=NarrativeEvent.Status.PLANNED,
+                ))
+                position += 1
+        if planned:
+            contract.events.all().delete()
+            NarrativeEvent.objects.bulk_create(planned)
+    # The ledger is now assigned to concrete episodes and becomes the canonical
+    # event contract consumed by screenwriting and segmentation.
     return {"agent": raw, "episodes": [e.id for e in episodes]}
 
 
