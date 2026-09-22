@@ -12,6 +12,7 @@ export default function ProjectsPage() {
   const [title, setTitle] = useState("");
   const [concept, setConcept] = useState("");
   const [delivery, setDelivery] = useState("storytell");
+  const [visualStyle, setVisualStyle] = useState("realistic");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,7 +31,7 @@ export default function ProjectsPage() {
     try {
       const project = await api<Project>("/api/projects/", {
         method: "POST",
-        body: JSON.stringify({ title, concept, delivery }),
+        body: JSON.stringify({ title, concept, delivery, visual_style: visualStyle }),
       });
       window.location.href = `/projects/${project.id}`;
     } catch (err) {
@@ -70,6 +71,26 @@ export default function ProjectsPage() {
             ))}
           </div>
         </div>
+        <label className="block text-xs text-[#9aa3b2]">
+          Style visuel de production
+          <select
+            value={visualStyle}
+            onChange={(e) => setVisualStyle(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white outline-none"
+          >
+            <option value="realistic">Réaliste cinématographique</option>
+            <option value="cartoon">Cartoon 2D</option>
+            <option value="manga">Manga / Anime</option>
+            <option value="3d_animation">Animation 3D</option>
+            <option value="comic">Bande dessinée / Comic</option>
+            <option value="watercolor">Aquarelle</option>
+            <option value="claymation">Claymation / Stop-motion</option>
+            <option value="pixel_art">Pixel art</option>
+            <option value="film_noir">Film noir</option>
+            <option value="fantasy">Fantasy stylisée</option>
+          </select>
+          <span className="mt-1 block text-[11px]">Ce choix verrouille les personnages, lieux, objets et rendus vidéo du projet.</span>
+        </label>
         <button disabled={busy} className="rounded-lg bg-[#e8c36a] px-4 py-2 text-sm font-medium text-[#0b0c10] disabled:opacity-50">
           {busy ? "Création…" : "Créer + bible + saison"}
         </button>
