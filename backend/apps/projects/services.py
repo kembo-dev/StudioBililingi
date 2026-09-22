@@ -214,6 +214,7 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
     )
     created = []
     scenes: dict[int, Scene] = {}
+    resolver = CharacterResolver(project)
 
     for index, row in enumerate(rows):
         text = str(row.get("text") or "").strip()
@@ -248,6 +249,14 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
             scene.location = location
             scene.save(update_fields=["location"])
 
+        speaker = resolver.resolve(row.get("speaker_id"))
+        if speaker is None and row.get("dialogue"):
+            speaker_name = _canonical_speaker_from_dialogue(
+                str(row.get("dialogue") or "") or str(row.get("text") or ""),
+                resolver,
+            )
+            speaker = resolver.resolve(speaker_name) if speaker_name else None
+
         beat = Beat.objects.create(
             episode=episode,
             script=script,
@@ -261,13 +270,16 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
             continuity=row.get("continuity") if isinstance(row.get("continuity"), dict) else {},
             emotion=str(row.get("emotion") or ""),
             dialogue=str(row.get("dialogue") or ""),
+            speaker_id=(
+                project.characters.filter(key=speaker.key).values_list("id", flat=True).first()
+                if speaker else None
+            ),
             video_prompt=str(row.get("video_prompt") or text),
             negative_prompt=str(row.get("negative_prompt") or ""),
             backend=str(row.get("backend") or "google-veo-3.1"),
             status=Beat.Status.DRAFT,
         )
 
-        resolver = CharacterResolver(project)
         char_keys = resolver.canonical_keys(row.get("character_ids") or row.get("characters"))
         prop_keys = _entity_keys(row.get("prop_ids") or row.get("props"))
         characters = list(project.characters.filter(key__in=char_keys))
@@ -527,14 +539,23 @@ def _segmentation_errors(chunks: list, *, form: str, project: Project) -> list[s
             dialogue = str(row.get("dialogue") or "").strip()
             text_value = str(row.get("text") or "").strip()
             if dialogue:
-                explicit = (
-                    _canonical_speaker_from_dialogue(dialogue, resolver)
-                    or _canonical_speaker_from_dialogue(text_value, resolver)
-                )
-                if not explicit:
+                speaker = resolver.resolve(row.get("speaker_id"))
+                if speaker is None:
+                    explicit = (
+                        _canonical_speaker_from_dialogue(dialogue, resolver)
+                        or _canonical_speaker_from_dialogue(text_value, resolver)
+                    )
+                    speaker = resolver.resolve(explicit) if explicit else None
+                if speaker is None:
                     names = _speaker_names(row, project, resolver)
-                    if not names:
-                        errors.append(f"beat {i}: dialogue sans locuteur identifiable")
+                    if len(names) == 1:
+                        speaker = resolver.resolve(names[0])
+                        if speaker:
+                            row["speaker_id"] = speaker.key
+                    else:
+                        errors.append(f"beat {i}: dialogue sans speaker_id canonique identifiable")
+                elif not row.get("speaker_id"):
+                    row["speaker_id"] = speaker.key
     return errors
 
 
@@ -576,8 +597,9 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     if errors:
         feedback = (
             "La passe précédente est invalide. Corrige TOUT le découpage en conservant l'histoire et les scènes. "
-            "Pour chaque dialogue, mets explicitement NOM : réplique dans le champ dialogue, même si character_ids "
-            "contient plusieurs personnages. Aucun beat ne doit dépasser 32 mots; cible 20 à 28 mots. "
+            "Pour chaque dialogue, fournis speaker_id avec l'id canonique exact du locuteur ET mets explicitement "
+            "NOM : réplique dans dialogue. character_ids contient les personnages visibles et ne remplace jamais "
+            "speaker_id. Aucun beat ne doit dépasser 32 mots; cible 20 à 28 mots. "
             "Erreurs détectées: " + "; ".join(errors)
         )
         try:
