@@ -5,6 +5,7 @@ from agents.backends import get_image
 
 VISUAL_STYLE_PROMPTS = {
     "realistic": "Photorealistic cinematic live-action, realistic skin, materials, anatomy and lens behavior.",
+    "realistic_imperfect": "Authentic photorealistic live-action with believable real-world imperfections: natural skin texture, pores, subtle blemishes, asymmetry, flyaway hair, fabric wrinkles, lived-in clothing and environments, small wear marks, imperfect practical lighting and physically plausible lens behavior. Preserve attractiveness and identity without beauty-filter smoothing, plastic skin, excessive retouching or artificial perfection.",
     "cartoon": "Premium 2D cartoon animation, clean expressive shapes, polished production design, consistent stylization.",
     "manga": "High-quality manga/anime visual language, clean line art, expressive faces, cinematic anime lighting.",
     "3d_animation": "Premium stylized 3D animated-film look, dimensional materials, cinematic lighting, coherent character modeling.",
