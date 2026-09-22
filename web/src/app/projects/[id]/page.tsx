@@ -30,7 +30,8 @@ type Episode = {
   scenes: Scene[];
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
-type Location = { id: number; key: string; name: string; look: string };\ntype Prop = { id: number; key: string; name: string; look: string; story_function?: string };
+type Location = { id: number; key: string; name: string; look: string };
+type Prop = { id: number; key: string; name: string; look: string; story_function?: string };
 type Ref = { id: number; role: string; uri: string; provider?: string; meta?: { name?: string; key?: string } };
 type Project = {
   id: number;
@@ -49,7 +50,9 @@ export default function ProjectPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [reframe, setReframe] = useState<Record<number, string>>({});
-  const [previewRef, setPreviewRef] = useState<Ref | null>(null);\n  const [showAddRef, setShowAddRef] = useState(false);\n  const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
+  const [previewRef, setPreviewRef] = useState<Ref | null>(null);
+  const [showAddRef, setShowAddRef] = useState(false);
+  const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
