@@ -10,7 +10,7 @@ from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
 from apps.projects.character_resolver import CharacterResolver
 from apps.projects.continuity import build_continuity_context, continuity_prompt
-from apps.projects.services import _canonical_speaker_from_dialogue, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
+from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
 from apps.bible.models import Character, Location, Prop
 
@@ -275,4 +275,32 @@ class ProductionPipelineTests(TestCase):
         self.assertIn("chemise blanche", prompt)
         self.assertIn("Atelier", prompt)
         self.assertIn("Carnet", prompt)
+
+    def test_script_speaker_is_promoted_to_locked_bible(self):
+        bible = persist_bible(self.project, {
+            "characters": [{
+                "id": "leo-dubois",
+                "name": "Léo Dubois",
+                "aliases": ["Dr. Léo Dubois"],
+                "role": "scientifique",
+                "look": "scientifique",
+            }],
+            "locations": [],
+            "props": [],
+        })
+        bible.locked = True
+        bible.save(update_fields=["locked"])
+
+        _ensure_script_speakers(
+            self.project,
+            bible,
+            "CLAIRE MOREAU : On descend.\nDR. LÉO DUBOIS : Continuez.",
+        )
+
+        resolver = CharacterResolver(self.project)
+        self.assertEqual(resolver.resolve("DR. LÉO DUBOIS").key, "leo-dubois")
+        claire = resolver.resolve("CLAIRE MOREAU")
+        self.assertIsNotNone(claire)
+        self.assertEqual(claire.key, "claire-moreau")
+        self.assertTrue(Character.objects.get(project=self.project, key="claire-moreau").locked)
 
