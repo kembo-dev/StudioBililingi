@@ -11,6 +11,7 @@ class Project(models.Model):
 
     class VisualStyle(models.TextChoices):
         REALISTIC = "realistic", "Réaliste cinématographique"
+        REALISTIC_IMPERFECT = "realistic_imperfect", "Réaliste avec imperfections réelles"
         CARTOON = "cartoon", "Cartoon"
         MANGA = "manga", "Manga / Anime"
         THREE_D = "3d_animation", "Animation 3D"
