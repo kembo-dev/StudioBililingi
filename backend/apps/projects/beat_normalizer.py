@@ -161,7 +161,7 @@ def merge_short_rows(rows: list[dict]) -> list[dict]:
     return result
 
 
-def inherit_orphan_dialogue_continuations(rows: list[dict]) -> list[dict]:
+def inherit_orphan_dialogue_continuations(rows: list[dict], *, resolve_character_names) -> list[dict]:
     """Carry the previous speaker onto tiny continuation fragments.
 
     Segmenters sometimes split a spoken sentence into two beats and omit the
@@ -197,6 +197,18 @@ def inherit_orphan_dialogue_continuations(rows: list[dict]) -> list[dict]:
                     row["text"] = row["dialogue"]
                     if prev_speaker_id:
                         row["speaker_id"] = prev_speaker_id
+                    else:
+                        # Resolve the inherited dialogue label immediately so
+                        # normalized conversation beats carry the canonical key.
+                        names = resolve_character_names(row)
+                        if len(names) == 1:
+                            row["speaker_id"] = next(
+                                (
+                                    key for key in (row.get("character_ids") or [])
+                                    if isinstance(key, str)
+                                ),
+                                None,
+                            )
                     row["speaker_inherited"] = True
         result.append(row)
     return result
@@ -238,7 +250,7 @@ def normalize_beats(
         normalized.extend(merge_short_rows(action_buffer))
 
     if form == "conversation":
-        normalized = inherit_orphan_dialogue_continuations(normalized)
+        normalized = inherit_orphan_dialogue_continuations(normalized, resolve_character_names=resolve_character_names)
         for row in normalized:
             dialogue = str(row.get("dialogue") or "").strip()
             text = str(row.get("text") or "").strip()
