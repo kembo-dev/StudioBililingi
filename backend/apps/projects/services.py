@@ -467,51 +467,82 @@ def write_script(episode: Episode) -> Script:
     return script
 
 
-def _ensure_script_speakers(project: Project, bible: WorldBible | None, script_text: str) -> None:
-    """Promote legitimate named script speakers into the canonical bible.
+def _script_speaker_labels(script_text: str) -> list[str]:
+    """Extract only screenplay dialogue labels from the beginning of lines.
 
-    The screenwriter may introduce a narratively necessary interlocutor (pilot,
-    colleague, witness) that was absent from the first bible draft. Keeping that
-    person outside the bible makes speaker_id impossible to resolve downstream.
+    Fountain metadata such as Title:, Author: and Episode: must never become
+    characters. A label is accepted only when it looks like a real dialogue
+    cue: uppercase (including underscore style) and followed by spoken text.
     """
+    blocked = {
+        "title", "author", "authors", "episode", "credit", "source", "draftdate",
+        "contact", "copyright", "notes", "scene", "image", "voixoff", "transition",
+    }
+    labels: list[str] = []
+    for raw_line in str(script_text or "").splitlines():
+        line = raw_line.strip()
+        match = re.match(r"^([^:\n]{2,60})\s*:\s*(\S.*)$", line)
+        if not match:
+            continue
+        label = match.group(1).strip().strip('"')
+        token = identity_token(label)
+        if not token or token in blocked:
+            continue
+        # Dialogue cues emitted by our writers are uppercase. This rejects
+        # prose such as "C'est la première phase, Claire : les charognards..."
+        # and Fountain front matter such as "Title: ...".
+        letters = [ch for ch in label if ch.isalpha()]
+        if not letters or not all(ch.isupper() for ch in letters):
+            continue
+        clean = re.sub(r"^(DR\.?|DOCTEUR|M\.?|MME)\s+", "", label, flags=re.I)
+        parts = [part for part in re.split(r"[ _]+", clean) if part]
+        if not (1 <= len(parts) <= 5):
+            continue
+        labels.append(label)
+    return list(dict.fromkeys(labels))
+
+
+def _ensure_script_speakers(project: Project, bible: WorldBible | None, script_text: str) -> None:
+    """Promote legitimate named dialogue speakers into the canonical bible."""
     if bible is None:
         return
     payload = dict(bible.payload or {})
     characters = list(payload.get("characters") or [])
     resolver = CharacterResolver(project)
-    known_tokens = {identity_token(item.get("name")) for item in characters if isinstance(item, dict)}
+    known_tokens = {
+        identity_token(item.get("name"))
+        for item in characters
+        if isinstance(item, dict) and item.get("name")
+    }
     changed = False
 
-    for line in str(script_text or "").splitlines():
-        match = re.match(r"^\s*([^:\n]{2,60})\s*:\s*\S", line)
-        if not match:
-            continue
-        label = match.group(1).strip().strip('"')
+    for label in _script_speaker_labels(script_text):
         if resolver.resolve(label):
             continue
-        # Ignore screenplay/control labels; only promote plausible human names.
         token = identity_token(label)
-        if not token or token in {"voixoff", "image", "scene", "int", "ext"}:
+        if token in known_tokens:
             continue
-        words = [w for w in re.split(r"\s+", label) if w]
-        if not (1 <= len(words) <= 5) or any(ch.isdigit() for ch in label):
-            continue
-        key = slugify(re.sub(r"^(dr\.?|docteur|m\.?|mme)\s+", "", label, flags=re.I)) or slugify(label)
-        if not key or token in known_tokens:
+        clean_name = re.sub(r"^(DR\.?|DOCTEUR|M\.?|MME)\s+", "", label, flags=re.I).strip()
+        clean_name = clean_name.replace("_", " ")
+        # Preserve accents while converting model-style CLAIRE_MOREAU to a
+        # readable canonical display name.
+        name = " ".join(part.capitalize() for part in clean_name.split())
+        key = slugify(name) or slugify(label)
+        if not key:
             continue
         characters.append({
             "id": key,
-            "name": label,
-            "aliases": [label, label.upper()],
+            "name": name,
+            "aliases": [label, label.upper(), name],
             "role": "interlocuteur",
             "want": "",
             "need": "",
             "look": "Apparence à définir et verrouiller avant génération vidéo.",
             "voice": "",
-            "locked": False,
+            "locked": bible.locked,
             "source": "screenwriter",
         })
-        known_tokens.add(token)
+        known_tokens.add(identity_token(name))
         changed = True
 
     if changed:
@@ -534,7 +565,6 @@ def _ensure_script_speakers(project: Project, bible: WorldBible | None, script_t
                     "locked": bible.locked,
                 },
             )
-
 
 def _beat_chunks(raw, fallback_text: str) -> list:
     items = raw if isinstance(raw, list) else (raw.get("beats") if isinstance(raw, dict) else None)
