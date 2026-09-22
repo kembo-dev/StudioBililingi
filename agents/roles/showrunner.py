@@ -16,7 +16,11 @@ class Showrunner:
             system=(
                 "Tu es le showrunner de StudioBililingi. Construis un plan de saison STRICTEMENT spécifique au concept "
                 "fourni. Réponds en JSON avec: logline, tone, episode_count, episodes, checkpoints. "
-                "episodes est une liste d'objets {number,title,logline,function_in_arc}. "
+                "episodes est une liste d'objets {number,title,logline,function_in_arc,events}. events contient les faits/actions "
+                "concrets, ordonnés et non redondants réservés exclusivement à cet épisode. "
+                "Choisis le NOMBRE NATUREL D'EPISODES selon la quantité réelle d'événements du concept. Une histoire "
+                "courte et linéaire doit rester UN SEUL épisode; ne l'étire jamais artificiellement. Si plusieurs épisodes "
+                "sont réellement nécessaires, attribue chaque événement du concept à UN SEUL épisode et ne le rejoue jamais. "
                 "Chaque épisode doit faire avancer le même arc causal: situation initiale -> découverte/décision -> "
                 "complication/transformation -> résolution fidèle à la fin donnée par le concept. "
                 "N'importe jamais des motifs d'un autre genre (appel mystérieux, prédiction, catastrophe, enquête, etc.) "
