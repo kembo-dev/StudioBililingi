@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from apps.projects.models import Project
 from apps.projects.serializers import BeatSerializer, EpisodeSerializer, ProjectCreateSerializer, ProjectSerializer
 from apps.projects.services import (
+    assist_concept,
     create_project,
     lock_bible,
     review_beat,
@@ -26,6 +27,22 @@ class ProjectViewSet(viewsets.ModelViewSet):
         "assets",
     ).order_by("-created_at")
     serializer_class = ProjectSerializer
+
+    @action(detail=False, methods=["post"], url_path="assist-concept")
+    def assist_concept_action(self, request):
+        idea = str(request.data.get("idea") or "").strip()
+        delivery = str(request.data.get("delivery") or "storytell").strip()
+        if delivery not in {"storytell", "voix_off", "conversation", "rencontre"}:
+            return Response({"detail": "Mode de livraison invalide"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = assist_concept(idea=idea, delivery=delivery)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            message = str(exc)
+            code = status.HTTP_429_TOO_MANY_REQUESTS if "429" in message and "RESOURCE_EXHAUSTED" in message else status.HTTP_400_BAD_REQUEST
+            return Response({"detail": message, "retryable": code == status.HTTP_429_TOO_MANY_REQUESTS}, status=code)
+        return Response(result)
 
     def create(self, request):
         ser = ProjectCreateSerializer(data=request.data)
