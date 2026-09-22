@@ -16,7 +16,7 @@ class StubTextBackend:
 class StubImageBackend:
     provider_id = "stub-image"
 
-    def generate(self, prompt: str, refs: list[str] | None = None) -> str:
+    def generate(self, prompt: str, refs: list[str] | None = None, *, project_key: str | None = None) -> str:
         return f"stub://image/{abs(hash(prompt))}"
 
 
@@ -32,6 +32,7 @@ class StubVideoBackend:
         ingredients: list[str] | None = None,
         duration_seconds: float = 8,
         aspect_ratio: str = "16:9",
+        project_key: str | None = None,
     ) -> str:
         refs = ingredients or []
         token = abs(hash((prompt, start_frame or "", tuple(refs))))
