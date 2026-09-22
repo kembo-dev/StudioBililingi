@@ -10,7 +10,7 @@ from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
 from apps.projects.character_resolver import CharacterResolver
 from apps.projects.continuity import build_continuity_context, continuity_prompt
-from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
+from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
 from apps.bible.models import Character, Location, Prop
 
@@ -303,4 +303,30 @@ class ProductionPipelineTests(TestCase):
         self.assertIsNotNone(claire)
         self.assertEqual(claire.key, "claire-moreau")
         self.assertTrue(Character.objects.get(project=self.project, key="claire-moreau").locked)
+
+    def test_script_speaker_parser_rejects_metadata_and_prose_labels(self):
+        labels = _script_speaker_labels(
+            "Title: Le silence des abysses\n"
+            "Author: Studio\n"
+            "Episode: 3\n"
+            "C'est la première phase, Claire : les charognards arrivent.\n"
+            "CLAIRE_MOREAU: Des mondes invisibles ?\n"
+            "LEO_DUBOIS: Exactement."
+        )
+        self.assertEqual(labels, ["CLAIRE_MOREAU", "LEO_DUBOIS"])
+
+    def test_cleanup_removes_only_known_bogus_generated_speakers(self):
+        bible = persist_bible(self.project, {
+            "characters": [
+                {"id": "title", "name": "Title", "role": "interlocuteur"},
+                {"id": "claire-moreau", "name": "Claire Moreau", "role": "interlocuteur"},
+            ],
+            "locations": [],
+            "props": [],
+        })
+        bible.locked = True
+        bible.save(update_fields=["locked"])
+        cleanup_generated_script_characters(self.project)
+        self.assertFalse(Character.objects.filter(project=self.project, name="Title").exists())
+        self.assertTrue(Character.objects.filter(project=self.project, name="Claire Moreau").exists())
 
