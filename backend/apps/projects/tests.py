@@ -9,6 +9,7 @@ from apps.production.models import Review
 from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
 from apps.projects.character_resolver import CharacterResolver
+from apps.projects.continuity import build_continuity_context, continuity_prompt
 from apps.projects.services import _canonical_speaker_from_dialogue, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
 from apps.bible.models import Character, Location, Prop
@@ -226,4 +227,52 @@ class ProductionPipelineTests(TestCase):
         errors = _segmentation_errors(chunks, form="conversation", project=self.project)
         self.assertEqual(errors, [])
         self.assertEqual(chunks[0]["speaker_id"], "antoine-kasongo")
+
+    def test_continuity_context_uses_canonical_entities_and_speaker(self):
+        persist_bible(self.project, {
+            "characters": [{
+                "id": "antoine",
+                "name": "Antoine",
+                "role": "artisan",
+                "look": "chemise blanche, cheveux courts",
+                "voice": "calme",
+            }],
+            "locations": [{
+                "id": "atelier",
+                "name": "Atelier",
+                "look": "etablis en bois et murs patines",
+                "time_of_day": "jour",
+            }],
+            "props": [{
+                "id": "carnet",
+                "name": "Carnet",
+                "look": "cuir brun use",
+                "story_function": "heritage",
+            }],
+        })
+        character = Character.objects.get(project=self.project)
+        location = Location.objects.get(project=self.project)
+        prop = Prop.objects.get(project=self.project)
+        beat = persist_beats(self.episode, [{
+            "text": "Antoine ouvre le carnet sur l'etabli et observe les dessins avant de reprendre lentement son travail.",
+            "scene_index": 1,
+            "scene_heading": "INT. ATELIER - JOUR",
+            "location_id": "atelier",
+            "character_ids": ["antoine"],
+            "speaker_id": "antoine",
+            "prop_ids": ["carnet"],
+            "dialogue": "Antoine : Je vais finir ce travail.",
+            "continuity": {"wardrobe": "chemise blanche"},
+        }])[0]
+
+        context = build_continuity_context(beat)
+        prompt = continuity_prompt(beat, context)
+
+        self.assertEqual(context["speaker"]["key"], character.key)
+        self.assertEqual(context["location"]["key"], location.key)
+        self.assertEqual(context["props"][0]["key"], prop.key)
+        self.assertTrue(context["characters"][0]["is_speaker"])
+        self.assertIn("chemise blanche", prompt)
+        self.assertIn("Atelier", prompt)
+        self.assertIn("Carnet", prompt)
 
