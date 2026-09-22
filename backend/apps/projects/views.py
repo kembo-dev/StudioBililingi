@@ -164,12 +164,37 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
         beat = self.get_queryset().get(pk=beat.pk)
         return Response(BeatSerializer(beat).data)
 
+    @action(detail=True, methods=["get"], url_path="render-readiness")
+    def render_readiness(self, request, pk=None):
+        from apps.projects.continuity import validate_render_readiness
+
+        beat = self.get_object()
+        readiness = validate_render_readiness(beat)
+        pack = readiness["ingredients"]
+        return Response({
+            "ready": readiness["ready"],
+            "errors": readiness["errors"],
+            "prompt": readiness["prompt"],
+            "continuity": readiness["context"],
+            "ingredients": pack["items"],
+            "start_frame": pack["start_frame"],
+            "duration_seconds": float(beat.duration_seconds),
+            "aspect_ratio": beat.episode.season.project.aspect_ratio,
+        })
+
     @action(detail=True, methods=["post"])
     def render(self, request, pk=None):
         from apps.jobs.models import Job
         from apps.jobs.queue import enqueue, is_eager
 
         beat = self.get_object()
+        from apps.projects.continuity import validate_render_readiness
+        readiness = validate_render_readiness(beat)
+        if not readiness["ready"]:
+            return Response(
+                {"detail": "Rendu vidéo refusé", "errors": readiness["errors"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         beat.status = beat.Status.RENDERING
         beat.save(update_fields=["status"])
         job = enqueue(
