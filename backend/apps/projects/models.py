@@ -63,3 +63,39 @@ class Season(models.Model):
     class Meta:
         unique_together = ("project", "number")
         ordering = ["number"]
+
+
+class NarrativeContract(models.Model):
+    class PointOfView(models.TextChoices):
+        THIRD_PERSON = "third_person", "Troisième personne"
+        FIRST_PERSON = "first_person", "Première personne"
+        DIALOGUE = "dialogue", "Dialogue / sans narrateur"
+
+    project = models.OneToOneField(Project, on_delete=models.CASCADE, related_name="narrative_contract")
+    point_of_view = models.CharField(max_length=24, choices=PointOfView.choices, default=PointOfView.THIRD_PERSON)
+    narrator = models.CharField(max_length=80, default="external")
+    tense = models.CharField(max_length=24, default="present")
+    story_type = models.CharField(max_length=40, blank=True)
+    recommended_episode_count = models.PositiveSmallIntegerField(default=1)
+    rules = models.JSONField(default=dict, blank=True)
+    locked = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class NarrativeEvent(models.Model):
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planifié"
+        SCRIPTED = "scripted", "Scénarisé"
+        CONSUMED = "consumed", "Consommé"
+
+    contract = models.ForeignKey(NarrativeContract, on_delete=models.CASCADE, related_name="events")
+    key = models.CharField(max_length=32)
+    position = models.PositiveSmallIntegerField()
+    description = models.TextField()
+    episode_number = models.PositiveSmallIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PLANNED)
+
+    class Meta:
+        ordering = ["position"]
+        unique_together = (("contract", "key"), ("contract", "position"))
