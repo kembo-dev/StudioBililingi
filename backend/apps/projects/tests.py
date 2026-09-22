@@ -10,7 +10,7 @@ from apps.projects.assembly import assemble_episode
 from apps.projects.models import Project, Season
 from apps.projects.character_resolver import CharacterResolver
 from apps.projects.beat_normalizer import normalize_beats
-from apps.projects.continuity import build_continuity_context, continuity_prompt
+from apps.projects.continuity import build_continuity_context, continuity_prompt, validate_render_readiness
 from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
 from apps.story.models import Beat, BeatTake, Episode, Script
 from apps.bible.models import Character, Location, Prop
@@ -403,4 +403,25 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(rows[1]["speaker_id"], "chloe")
         self.assertTrue(rows[1]["dialogue"].startswith("CHLOÉ"))
         self.assertTrue(rows[1]["speaker_inherited"])
+
+    def test_render_readiness_blocks_missing_visual_refs(self):
+        persist_bible(self.project, {
+            "characters": [{"id": "chloe", "name": "Chloé", "look": "pyjama confortable"}],
+            "locations": [{"id": "cuisine", "name": "Cuisine", "look": "lumière tamisée"}],
+            "props": [],
+        })
+        beat = persist_beats(self.episode, [{
+            "text": "CHLOÉ : Impossible de fermer l'œil.",
+            "dialogue": "CHLOÉ : Impossible de fermer l'œil.",
+            "speaker_id": "chloe",
+            "character_ids": ["chloe"],
+            "location_id": "cuisine",
+            "scene_index": 1,
+            "video_prompt": "Plan rapproché de Chloé dans la cuisine.",
+        }])[0]
+
+        readiness = validate_render_readiness(beat)
+        self.assertFalse(readiness["ready"])
+        self.assertTrue(any("chloe" in error for error in readiness["errors"]))
+        self.assertTrue(any("cuisine" in error for error in readiness["errors"]))
 
