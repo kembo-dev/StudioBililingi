@@ -79,6 +79,7 @@ export default function ProjectsPage() {
             className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white outline-none"
           >
             <option value="realistic">Réaliste cinématographique</option>
+            <option value="realistic_imperfect">Réaliste avec imperfections réelles</option>
             <option value="cartoon">Cartoon 2D</option>
             <option value="manga">Manga / Anime</option>
             <option value="3d_animation">Animation 3D</option>
