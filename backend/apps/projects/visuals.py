@@ -68,13 +68,16 @@ def generate_refs(project: Project) -> list:
 
 
 
-def regenerate_visual_ref(project: Project, entity_type: str, entity_key: str):
+def regenerate_visual_ref(project: Project, entity_type: str, entity_key: str, custom_prompt: str = ""):
     bible = project.bibles.first()
     if bible is None or not bible.locked:
         raise ValueError("Verrouille la bible avant les références visuelles")
 
     entity_type = str(entity_type or "").strip().lower()
     entity_key = str(entity_key or "").strip()
+    custom_prompt = str(custom_prompt or "").strip()
+    if len(custom_prompt) > 4000:
+        raise ValueError("Le prompt complémentaire est limité à 4000 caractères")
     models = {"character": Character, "location": Location, "prop": Prop}
     if entity_type not in models:
         raise ValueError("Type de référence invalide")
@@ -91,19 +94,19 @@ def regenerate_visual_ref(project: Project, entity_type: str, entity_key: str):
         role = Asset.Role.CHARACTER_REF
         uri = artist.character_ref(
             name=entity.name, look=entity.look, role=entity.role,
-            project_key=project_key, visual_style=project.visual_style,
+            project_key=project_key, visual_style=project.visual_style, custom_prompt=custom_prompt,
         )
     elif entity_type == "location":
         role = Asset.Role.LOCATION_REF
         uri = artist.location_ref(
             name=entity.name, look=entity.look, time_of_day=entity.time_of_day,
-            project_key=project_key, visual_style=project.visual_style,
+            project_key=project_key, visual_style=project.visual_style, custom_prompt=custom_prompt,
         )
     else:
         role = Asset.Role.PROP_REF
         uri = artist.prop_ref(
             name=entity.name, look=entity.look,
-            project_key=project_key, visual_style=project.visual_style,
+            project_key=project_key, visual_style=project.visual_style, custom_prompt=custom_prompt,
         )
 
     old_assets = list(Asset.objects.filter(project=project, role=role, meta__key=entity.key))
@@ -121,6 +124,7 @@ def regenerate_visual_ref(project: Project, entity_type: str, entity_key: str):
                 "name": entity.name,
                 "entity": entity_type,
                 "visual_style": project.visual_style,
+                "custom_prompt": custom_prompt,
                 "regenerated": True,
             },
         )
