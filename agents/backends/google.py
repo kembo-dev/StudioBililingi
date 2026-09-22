@@ -115,13 +115,13 @@ class GoogleImageBackend:
         model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
         client = _client()
         try:
-            response = client.models.generate_content(
+            response = _with_quota_retry(lambda: client.models.generate_content(
                 model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_modalities=["IMAGE"],
                 ),
-            )
+            ))
             parts = list(getattr(response, "parts", None) or [])
             if not parts:
                 for candidate in getattr(response, "candidates", None) or []:
