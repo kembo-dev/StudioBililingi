@@ -401,10 +401,22 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
             )
             speaker = resolver.resolve(speaker_name) if speaker_name else None
 
+        event_key = str(row.get("event_id") or "").strip()
+        narrative_event = None
+        if event_key:
+            narrative_event = NarrativeEvent.objects.filter(
+                contract__project=project,
+                key=event_key,
+                episode_number=episode.number,
+            ).first()
+            if narrative_event is None:
+                raise ValueError(f"Événement narratif inconnu pour E{episode.number}: {event_key}")
+
         beat = Beat.objects.create(
             episode=episode,
             script=script,
             scene=scene,
+            narrative_event=narrative_event,
             index=index,
             text=text,
             word_count=len(_words(text)),
@@ -433,6 +445,10 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
         scene.characters.add(*characters)
         scene.props.add(*props)
         created.append(beat)
+
+    event_ids = {beat.narrative_event_id for beat in created if beat.narrative_event_id}
+    if event_ids:
+        NarrativeEvent.objects.filter(id__in=event_ids).update(status=NarrativeEvent.Status.SCRIPTED)
 
     episode.status = Episode.Status.SEGMENTED
     episode.save(update_fields=["status"])
@@ -888,7 +904,8 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     try:
         from agents.roles.segmenter import BeatSegmenter
         segmenter = BeatSegmenter()
-        raw = segmenter.segment(text, form=project.delivery, bible=bible_payload)
+        contract_payload = narrative_contract_payload(project)
+        raw = segmenter.segment(text, form=project.delivery, bible=bible_payload, narrative_contract=contract_payload)
     except Exception as exc:
         raise RuntimeError(f"La segmentation a échoué: {exc}") from exc
 
@@ -912,7 +929,7 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
             "Erreurs détectées: " + "; ".join(errors)
         )
         try:
-            raw = segmenter.segment(text, form=project.delivery, bible=bible_payload, feedback=feedback)
+            raw = segmenter.segment(text, form=project.delivery, bible=bible_payload, feedback=feedback, narrative_contract=contract_payload)
         except Exception as exc:
             raise RuntimeError(f"La correction automatique de la segmentation a échoué: {exc}") from exc
         chunks = _beat_chunks(raw, "")
@@ -921,6 +938,26 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
             form=project.delivery,
             resolve_character_names=resolver.names_for_row,
         )
+
+    contract_payload = narrative_contract_payload(project)
+    expected_events = {
+        event["key"] for event in contract_payload.get("events", [])
+        if event.get("episode_number") == episode.number
+    }
+    if expected_events:
+        used_events = {str(row.get("event_id") or "").strip() for row in chunks}
+        unknown = sorted(used_events - expected_events - {""})
+        missing = sorted(expected_events - used_events)
+        untagged = [str(i + 1) for i, row in enumerate(chunks) if not str(row.get("event_id") or "").strip()]
+        ledger_errors = []
+        if unknown:
+            ledger_errors.append("event_id inconnus: " + ", ".join(unknown))
+        if missing:
+            ledger_errors.append("événements non couverts: " + ", ".join(missing))
+        if untagged:
+            ledger_errors.append("beats sans event_id: " + ", ".join(untagged))
+        if ledger_errors:
+            raise ValueError("Narrative Contract refusé: " + "; ".join(ledger_errors))
 
     _validate_segmented_beats(chunks, form=project.delivery, project=project)
     return persist_beats(episode, chunks)
