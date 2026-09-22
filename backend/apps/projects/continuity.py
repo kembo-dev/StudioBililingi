@@ -14,12 +14,120 @@ def _latest_ref(project, role: str, key: str | None = None):
     return None
 
 
-def resolve_ingredients(beat: Beat) -> dict:
-    """Resolve only references explicitly attached to the beat.
+def _character_state(character, *, speaker_id: int | None = None) -> dict:
+    return {
+        "key": character.key,
+        "name": character.name,
+        "role": character.role,
+        "look": character.look,
+        "voice": character.voice,
+        "is_speaker": character.id == speaker_id,
+    }
 
-    Never fall back to every character/prop in the project: doing so leaks
-    unrelated continuity into video generation.
-    """
+
+def build_continuity_context(beat: Beat) -> dict:
+    """Build deterministic visual continuity from canonical project entities."""
+    scene = beat.scene
+    previous = None
+    if beat.script_id:
+        previous = (
+            Beat.objects.filter(script_id=beat.script_id, index__lt=beat.index)
+            .order_by("-index")
+            .first()
+        )
+
+    characters = [
+        _character_state(character, speaker_id=beat.speaker_id)
+        for character in beat.characters.all().order_by("key")
+    ]
+    location = None
+    if beat.location_id:
+        location = {
+            "key": beat.location.key,
+            "name": beat.location.name,
+            "look": beat.location.look,
+            "time_of_day": (
+                scene.time_of_day if scene and scene.time_of_day else beat.location.time_of_day
+            ),
+            "lighting": scene.lighting if scene else "",
+        }
+    props = [
+        {
+            "key": prop.key,
+            "name": prop.name,
+            "look": prop.look,
+            "story_function": prop.story_function,
+        }
+        for prop in beat.props.all().order_by("key")
+    ]
+
+    return {
+        "scene": {
+            "index": scene.index if scene else None,
+            "heading": scene.heading if scene else "",
+            "summary": scene.summary if scene else "",
+        },
+        "characters": characters,
+        "speaker": (
+            {"key": beat.speaker.key, "name": beat.speaker.name, "voice": beat.speaker.voice}
+            if beat.speaker_id else None
+        ),
+        "location": location,
+        "props": props,
+        "beat_state": beat.continuity if isinstance(beat.continuity, dict) else {},
+        "previous_beat": (
+            {
+                "id": previous.id,
+                "index": previous.index,
+                "continuity": previous.continuity if isinstance(previous.continuity, dict) else {},
+                "camera": previous.camera if isinstance(previous.camera, dict) else {},
+                "emotion": previous.emotion,
+            }
+            if previous else None
+        ),
+    }
+
+
+def continuity_prompt(beat: Beat, context: dict) -> str:
+    """Turn canonical continuity into stable video instructions."""
+    lines = [
+        beat.video_prompt or beat.text,
+        "",
+        "CONTINUITY LOCK - preserve exactly across shots:",
+    ]
+    location = context.get("location")
+    if location:
+        lines.append(
+            f"LOCATION [{location['key']}]: {location['name']}. "
+            f"Visual identity: {location['look']}. Time: {location['time_of_day']}. "
+            f"Lighting: {location['lighting']}."
+        )
+    for character in context.get("characters") or []:
+        speaking = " SPEAKING CHARACTER." if character.get("is_speaker") else ""
+        lines.append(
+            f"CHARACTER [{character['key']}]: {character['name']}. "
+            f"Keep exact identity and appearance: {character['look']}. "
+            f"Voice continuity: {character['voice']}.{speaking}"
+        )
+    for prop in context.get("props") or []:
+        lines.append(
+            f"PROP [{prop['key']}]: {prop['name']}. Keep exact appearance: {prop['look']}."
+        )
+    state = context.get("beat_state") or {}
+    if state:
+        lines.append(f"BEAT CONTINUITY STATE: {state}.")
+    previous = context.get("previous_beat")
+    if previous:
+        lines.append(
+            f"PREVIOUS SHOT STATE: continuity={previous['continuity']}; "
+            f"camera={previous['camera']}; emotion={previous['emotion']}."
+        )
+    lines.append("Do not change face, age, skin tone, hairstyle, wardrobe, props or set identity unless explicitly required by the beat.")
+    return "\n".join(lines)
+
+
+def resolve_ingredients(beat: Beat) -> dict:
+    """Resolve only references explicitly attached to the beat."""
     project = beat.episode.season.project
     picked = []
 
@@ -44,13 +152,14 @@ def resolve_ingredients(beat: Beat) -> dict:
 
 
 def render_beat(beat: Beat) -> Beat:
-    """Render a beat. The caller/queue owns the Job lifecycle."""
+    """Render a beat with canonical continuity. The queue owns Job lifecycle."""
     from agents.backends import get_video
 
     project = beat.episode.season.project
+    context = build_continuity_context(beat)
     pack = resolve_ingredients(beat)
     backend = get_video()
-    prompt = beat.video_prompt or beat.text
+    prompt = continuity_prompt(beat, context)
     next_number = (beat.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
     take = BeatTake.objects.create(
         beat=beat,
@@ -59,7 +168,7 @@ def render_beat(beat: Beat) -> Beat:
         negative_prompt=beat.negative_prompt,
         backend=getattr(backend, "provider_id", beat.backend),
         status=BeatTake.Status.RENDERING,
-        generation_meta={"ingredients": pack["items"]},
+        generation_meta={"ingredients": pack["items"], "continuity": context},
     )
 
     if beat.status == Beat.Status.DRAFT:
@@ -84,7 +193,13 @@ def render_beat(beat: Beat) -> Beat:
             role=Asset.Role.CLIP,
             uri=uri,
             provider=getattr(backend, "provider_id", ""),
-            meta={"prompt": prompt, "ingredients": pack["items"], "take": take.number, "take_id": take.id},
+            meta={
+                "prompt": prompt,
+                "ingredients": pack["items"],
+                "continuity": context,
+                "take": take.number,
+                "take_id": take.id,
+            },
         )
         take.uri = uri
         take.status = BeatTake.Status.REVIEW
