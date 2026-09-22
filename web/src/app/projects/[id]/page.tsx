@@ -32,7 +32,7 @@ type Episode = {
 type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; key: string; name: string; look: string };
 type Prop = { id: number; key: string; name: string; look: string; story_function?: string };
-type Ref = { id: number; role: string; uri: string; provider?: string; meta?: { name?: string; key?: string } };
+type Ref = { id: number; role: string; uri: string; provider?: string; meta?: { name?: string; key?: string; entity?: string; custom_prompt?: string } };
 type Job = { id: number; kind: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; error?: string; result?: Record<string, unknown> };
 type Project = {
   id: number;
@@ -56,6 +56,8 @@ export default function ProjectPage() {
   const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
   const [refJob, setRefJob] = useState<Job | null>(null);
   const [refNotice, setRefNotice] = useState("");
+  const [promptRef, setPromptRef] = useState<Ref | null>(null);
+  const [refPrompt, setRefPrompt] = useState("");
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
@@ -272,18 +274,27 @@ export default function ProjectPage() {
                       <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[#e8c36a]">{ref.role.replaceAll("_", " ")}</p>
                       <p className="mt-1 truncate text-xs text-[#9aa3b2]">{ref.provider || "provider inconnu"}</p>
                     </div>
-                    <button
-                      type="button"
-                      disabled={busy === `delete-ref-${ref.id}`}
-                      onClick={async () => {
-                        const name = ref.meta?.name ?? ref.meta?.key ?? "cette référence";
-                        if (!window.confirm(`Supprimer l'image de référence « ${name} » ? L'élément restera dans la Bible et pourra être régénéré.`)) return;
-                        await run(`delete-ref-${ref.id}`, `/api/projects/${project.id}/delete-reference/`, { asset_id: ref.id });
-                      }}
-                      className="shrink-0 text-xs text-red-400 disabled:opacity-50"
-                    >
-                      {busy === `delete-ref-${ref.id}` ? "…" : "Supprimer"}
-                    </button>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setPromptRef(ref); setRefPrompt(ref.meta?.custom_prompt ?? ""); }}
+                        className="text-xs text-[#e8c36a]"
+                      >
+                        Affiner / Régénérer
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === `delete-ref-${ref.id}`}
+                        onClick={async () => {
+                          const name = ref.meta?.name ?? ref.meta?.key ?? "cette référence";
+                          if (!window.confirm(`Supprimer l'image de référence « ${name} » ? L'élément restera dans la Bible et pourra être régénéré.`)) return;
+                          await run(`delete-ref-${ref.id}`, `/api/projects/${project.id}/delete-reference/`, { asset_id: ref.id });
+                        }}
+                        className="text-xs text-red-400 disabled:opacity-50"
+                      >
+                        {busy === `delete-ref-${ref.id}` ? "…" : "Supprimer"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -344,6 +355,53 @@ export default function ProjectPage() {
           </article>
         ))}
       </section>
+      {promptRef ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" onClick={() => setPromptRef(null)}>
+          <form
+            className="w-full max-w-2xl space-y-4 rounded-xl border border-[#2a2e38] bg-[#14161c] p-5"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const entityType = promptRef.meta?.entity || (promptRef.role.includes("character") ? "character" : promptRef.role.includes("location") ? "location" : "prop");
+              const entityKey = promptRef.meta?.key;
+              if (!entityKey) { setError("Cette référence ne possède pas de clé canonique."); return; }
+              const key = `prompt-ref-${promptRef.id}`;
+              setBusy(key); setError("");
+              try {
+                await api(`/api/projects/${project.id}/regenerate-reference/`, {
+                  method: "POST",
+                  body: JSON.stringify({ entity_type: entityType, entity_key: entityKey, custom_prompt: refPrompt }),
+                });
+                setPromptRef(null);
+                await load();
+              } catch (err) { setError(String(err)); } finally { setBusy(""); }
+            }}
+          >
+            <div>
+              <p className="text-lg font-medium">Affiner la référence · {promptRef.meta?.name ?? promptRef.meta?.key ?? "Référence"}</p>
+              <p className="mt-1 text-xs text-[#9aa3b2]">La Bible et le style du projet restent prioritaires. Ajoute seulement les détails visuels que tu veux préciser pour cette génération.</p>
+            </div>
+            <textarea
+              autoFocus
+              maxLength={4000}
+              rows={7}
+              value={refPrompt}
+              onChange={(e) => setRefPrompt(e.target.value)}
+              placeholder="Ex. conserver exactement le même visage, ajouter une veste noire légèrement usée, expression plus fatiguée, lumière latérale douce…"
+              className="w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-3 text-sm text-white outline-none focus:border-[#e8c36a]"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-[#9aa3b2]">{refPrompt.length}/4000</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setPromptRef(null)} className="rounded-lg border border-[#2a2e38] px-4 py-2 text-sm">Annuler</button>
+                <button disabled={busy === `prompt-ref-${promptRef.id}`} className="rounded-lg bg-[#e8c36a] px-4 py-2 text-sm font-medium text-[#0b0c10] disabled:opacity-50">
+                  {busy === `prompt-ref-${promptRef.id}` ? "Régénération en cours…" : "Régénérer avec ce prompt"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      ) : null}
       {previewRef ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
