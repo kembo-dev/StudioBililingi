@@ -10,7 +10,7 @@ from apps.jobs.models import Job
 from apps.projects.models import Project, Season
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 from apps.projects.beat_normalizer import normalize_beats
-from apps.projects.character_resolver import CharacterResolver, normalize_bible_payload
+from apps.projects.character_resolver import CharacterResolver, identity_token, normalize_bible_payload
 from apps.projects.story_normalizer import bible_errors, normalize_story_bible, script_conversation_errors
 
 
