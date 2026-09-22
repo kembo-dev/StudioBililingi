@@ -41,6 +41,19 @@ class Script(models.Model):
         ordering = ["-version"]
 
 
+class ScenePlan(models.Model):
+    episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="scene_plans")
+    script = models.ForeignKey(Script, on_delete=models.CASCADE, related_name="scene_plans")
+    version = models.PositiveIntegerField(default=1)
+    payload = models.JSONField(default=list)
+    locked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("script", "version")
+        ordering = ["-version"]
+
+
 class Scene(models.Model):
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="scenes")
     script = models.ForeignKey(Script, on_delete=models.CASCADE, related_name="scenes")
