@@ -75,15 +75,51 @@ def _copy_for_split(row: dict, text: str, *, speaker: str = "") -> dict:
     return clone
 
 
+def _speaker_occurrences(text: str) -> list[tuple[int, int, str]]:
+    return [(m.start(1), m.end(), m.group(1).strip()) for m in _SPEAKER_RE.finditer(text or "")]
+
+
+def split_multi_speaker_row(row: dict) -> list[dict]:
+    """One dialogue speaker per beat; never keep A: ... B: ... together."""
+    text = str(row.get("text") or "").strip()
+    occurrences = _speaker_occurrences(text)
+    if len(occurrences) <= 1:
+        return [deepcopy(row)]
+
+    pieces: list[dict] = []
+    prefix = text[:occurrences[0][0]].strip()
+    for i, (start, _end, label) in enumerate(occurrences):
+        stop = occurrences[i + 1][0] if i + 1 < len(occurrences) else len(text)
+        piece = text[start:stop].strip()
+        if i == 0 and prefix:
+            piece = f"{prefix} {piece}".strip()
+        clone = deepcopy(row)
+        clone["text"] = piece
+        clone["dialogue"] = piece
+        clone["speaker_label"] = label
+        clone.pop("speaker_id", None)
+        pieces.append(clone)
+    return pieces
+
+
 def split_oversized_row(row: dict) -> list[dict]:
+    """Split long beats without duplicating a complete dialogue on every child."""
     text = str(row.get("text") or "").strip()
     if len(words(text)) <= MAX_WORDS:
         return [deepcopy(row)]
 
     label = speaker_label(str(row.get("dialogue") or "")) or speaker_label(text)
     pieces = split_text(text, MAX_WORDS)
-    return [_copy_for_split(row, piece, speaker=label) for piece in pieces]
-
+    result: list[dict] = []
+    for piece in pieces:
+        clone = deepcopy(row)
+        clone["text"] = piece.strip()
+        if clone.get("dialogue"):
+            clone["dialogue"] = piece.strip()
+            if label and not speaker_label(clone["dialogue"]):
+                clone["dialogue"] = f"{label.upper()} : {clone['dialogue']}"
+        result.append(clone)
+    return result
 
 def same_scene(a: dict, b: dict) -> bool:
     return str(a.get("scene_index") or 1) == str(b.get("scene_index") or 1)
@@ -136,11 +172,29 @@ def normalize_beats(
     resolve_character_names(row) must return canonical character names from the
     project bible/database for the structured character_ids on that row.
     """
-    expanded: list[dict] = []
+    speaker_split: list[dict] = []
     for item in chunks:
-        expanded.extend(split_oversized_row(dict(item)))
+        speaker_split.extend(split_multi_speaker_row(dict(item)))
 
-    normalized = merge_short_rows(expanded)
+    expanded: list[dict] = []
+    for item in speaker_split:
+        expanded.extend(split_oversized_row(item))
+
+    # Do not merge dialogue beats: a merge can recreate two-speaker beats or
+    # attach an action to the wrong speaker. Tiny dialogue beats are valid
+    # render units; only non-dialogue action beats are eligible for merging.
+    normalized: list[dict] = []
+    action_buffer: list[dict] = []
+    for row in expanded:
+        if row.get("dialogue") or speaker_label(str(row.get("text") or "")):
+            if action_buffer:
+                normalized.extend(merge_short_rows(action_buffer))
+                action_buffer = []
+            normalized.append(row)
+        else:
+            action_buffer.append(row)
+    if action_buffer:
+        normalized.extend(merge_short_rows(action_buffer))
 
     if form == "conversation":
         for row in normalized:
