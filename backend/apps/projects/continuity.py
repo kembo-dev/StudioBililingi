@@ -151,15 +151,52 @@ def resolve_ingredients(beat: Beat) -> dict:
     return {"items": picked, "uris": uris, "start_frame": start}
 
 
+def validate_render_readiness(beat: Beat) -> dict:
+    """Fail before spending Veo quota when canonical continuity is incomplete."""
+    context = build_continuity_context(beat)
+    pack = resolve_ingredients(beat)
+    errors = []
+
+    if not beat.video_prompt and not beat.text:
+        errors.append("beat sans prompt vidéo exploitable")
+    if beat.dialogue and not beat.speaker_id:
+        errors.append("dialogue sans speaker canonique")
+    if beat.location_id and not any(
+        item["role"] == Asset.Role.LOCATION_REF for item in pack["items"]
+    ):
+        errors.append(f"référence visuelle du lieu absente: {beat.location.key}")
+    missing_characters = [
+        character.key
+        for character in beat.characters.all()
+        if not any(
+            item["role"] == Asset.Role.CHARACTER_REF and item["key"] == character.key
+            for item in pack["items"]
+        )
+    ]
+    if missing_characters:
+        errors.append("références personnages absentes: " + ", ".join(missing_characters))
+
+    return {
+        "ready": not errors,
+        "errors": errors,
+        "context": context,
+        "ingredients": pack,
+        "prompt": continuity_prompt(beat, context),
+    }
+
+
 def render_beat(beat: Beat) -> Beat:
     """Render a beat with canonical continuity. The queue owns Job lifecycle."""
     from agents.backends import get_video
 
     project = beat.episode.season.project
-    context = build_continuity_context(beat)
-    pack = resolve_ingredients(beat)
+    readiness = validate_render_readiness(beat)
+    if not readiness["ready"]:
+        raise ValueError("Rendu vidéo refusé: " + "; ".join(readiness["errors"]))
+    context = readiness["context"]
+    pack = readiness["ingredients"]
     backend = get_video()
-    prompt = continuity_prompt(beat, context)
+    prompt = readiness["prompt"]
     next_number = (beat.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
     take = BeatTake.objects.create(
         beat=beat,
