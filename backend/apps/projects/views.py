@@ -8,6 +8,8 @@ from apps.projects.services import (
     assist_concept,
     create_project,
     lock_bible,
+    lock_scene_plan,
+    plan_scenes,
     persist_narrative_contract,
     review_beat,
     run_bible,
@@ -238,6 +240,29 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             write_script(episode)
         except (ValueError, RuntimeError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        episode = self.get_queryset().get(pk=episode.pk)
+        return Response(EpisodeSerializer(episode).data)
+
+    @action(detail=True, methods=["post"], url_path="plan-scenes")
+    def plan_scenes_action(self, request, pk=None):
+        episode = self.get_object()
+        script = episode.scripts.order_by("-version").first()
+        if script is None:
+            return Response({"detail": "Écris le script avant de planifier les scènes"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            plan_scenes(episode, script.fountain, persist=True)
+        except (ValueError, RuntimeError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        episode = self.get_queryset().get(pk=episode.pk)
+        return Response(EpisodeSerializer(episode).data)
+
+    @action(detail=True, methods=["post"], url_path="lock-scene-plan")
+    def lock_scene_plan_action(self, request, pk=None):
+        episode = self.get_object()
+        try:
+            lock_scene_plan(episode, request.data.get("scene_plan_id"))
+        except (TypeError, ValueError) as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         episode = self.get_queryset().get(pk=episode.pk)
         return Response(EpisodeSerializer(episode).data)
