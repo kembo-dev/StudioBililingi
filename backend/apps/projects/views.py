@@ -78,6 +78,27 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data)
 
+    @action(detail=True, methods=["post"], url_path="add-reference")
+    def add_reference_action(self, request, pk=None):
+        from apps.projects.visuals import add_manual_ref
+
+        project = self.get_object()
+        try:
+            entity = add_manual_ref(
+                project,
+                entity_type=request.data.get("entity_type", ""),
+                name=request.data.get("name", ""),
+                look=request.data.get("look", ""),
+                role=request.data.get("role", ""),
+                time_of_day=request.data.get("time_of_day", ""),
+                story_function=request.data.get("story_function", ""),
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        project = self.get_queryset().get(pk=project.pk)
+        return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"], url_path="regenerate-character-ref")
     def regenerate_character_ref_action(self, request, pk=None):
         from apps.projects.visuals import regenerate_character_ref
