@@ -484,6 +484,26 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(len(beats), 2)
         self.assertNotEqual(beats[0].scene_id, beats[1].scene_id)
 
+    def test_redundancy_validator_rejects_near_duplicate_beats_for_same_event(self):
+        from apps.projects.services import _event_redundancy_errors
+
+        errors = _event_redundancy_errors([
+            {"event_id": "EV05", "text": "Leo salue joyeusement les passants sur le chemin de l'ecole."},
+            {"event_id": "EV05", "text": "Leo salue joyeusement les passants sur le chemin vers l'ecole."},
+        ])
+        self.assertTrue(errors)
+        self.assertIn("EV05", errors[0])
+
+    def test_redundancy_validator_allows_distinct_visual_steps_for_same_event(self):
+        from apps.projects.services import _event_redundancy_errors
+
+        errors = _event_redundancy_errors([
+            {"event_id": "EV05", "text": "Leo leve la main vers une voisine devant sa maison."},
+            {"event_id": "EV05", "text": "Le boulanger sourit et repond au salut de Leo depuis sa boutique."},
+        ])
+        self.assertEqual(errors, [])
+
+
     def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
         before_scripts = Script.objects.filter(episode=self.episode).count()
         before_beats = Beat.objects.filter(episode=self.episode).count()
