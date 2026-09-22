@@ -9,7 +9,7 @@ from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
-from apps.story.models import Beat, BeatTake, Episode, Scene, Script
+from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script
 from apps.projects.beat_normalizer import normalize_beats, speaker_label, _speaker_occurrences
 from apps.projects.character_resolver import CharacterResolver, identity_token, normalize_bible_payload
 from apps.projects.story_normalizer import bible_errors, normalize_story_bible, script_conversation_errors
@@ -1028,7 +1028,7 @@ def _scene_plan_errors(
     return errors
 
 
-def plan_scenes(episode: Episode, script_text: str) -> list[dict]:
+def plan_scenes(episode: Episode, script_text: str, *, persist: bool = True) -> list[dict]:
     project = episode.season.project
     bible = project.bibles.first()
     if bible is None or not bible.locked:
@@ -1071,7 +1071,35 @@ def plan_scenes(episode: Episode, script_text: str) -> list[dict]:
     )
     if errors:
         raise ValueError("Scene Plan refusé: " + "; ".join(errors))
+    if persist:
+        script = episode.scripts.order_by("-version").first()
+        if script is None:
+            raise ValueError("Écris le script avant de planifier les scènes")
+        latest_plan = script.scene_plans.order_by("-version").first()
+        version = (latest_plan.version + 1) if latest_plan else 1
+        ScenePlan.objects.create(episode=episode, script=script, version=version, payload=scenes, locked=False)
     return scenes
+
+
+def lock_scene_plan(episode: Episode, scene_plan_id: int | None = None) -> ScenePlan:
+    script = episode.scripts.order_by("-version").first()
+    if script is None:
+        raise ValueError("Écris le script avant de verrouiller le Scene Plan")
+    plans = script.scene_plans.all()
+    plan = plans.filter(pk=scene_plan_id).first() if scene_plan_id else plans.order_by("-version").first()
+    if plan is None:
+        raise ValueError("Génère d'abord un Scene Plan")
+    project = episode.season.project
+    contract = narrative_contract_payload(project)
+    expected_events = {event["key"] for event in contract.get("events", []) if event.get("episode_number") == episode.number}
+    errors = _scene_plan_errors(plan.payload, project=project, episode=episode, expected_events=expected_events)
+    if errors:
+        raise ValueError("Scene Plan refusé: " + "; ".join(errors))
+    with transaction.atomic():
+        plans.exclude(pk=plan.pk).filter(locked=True).update(locked=False)
+        plan.locked = True
+        plan.save(update_fields=["locked"])
+    return plan
 
 
 def _beat_scene_plan_errors(chunks: list[dict], scene_plan: list[dict]) -> list[str]:
@@ -1122,7 +1150,13 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     bible = project.bibles.first()
     _ensure_script_speakers(project, bible, text)
     bible_payload = bible.payload if bible else {}
-    scene_plan = plan_scenes(episode, text)
+    script = latest
+    if script is None:
+        raise ValueError("Écris le script avant de lancer la segmentation")
+    stored_plan = script.scene_plans.filter(locked=True).order_by("-version").first()
+    if stored_plan is None:
+        raise ValueError("Verrouille le Scene Plan avant de découper en beats")
+    scene_plan = stored_plan.payload
 
     try:
         from agents.roles.segmenter import BeatSegmenter
