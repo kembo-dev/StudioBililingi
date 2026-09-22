@@ -24,6 +24,10 @@ export default function ProjectsPage() {
   const [assistBusy, setAssistBusy] = useState(false);
   const [suggestion, setSuggestion] = useState<ConceptSuggestion | null>(null);
   const [genre, setGenre] = useState("");
+  const [subgenre, setSubgenre] = useState("");
+  const [setting, setSetting] = useState("Kinshasa, RDC");
+  const [episodeCount, setEpisodeCount] = useState("auto");
+  const [episodeDuration, setEpisodeDuration] = useState("60");
   const [tone, setTone] = useState("");
   const [endingIntent, setEndingIntent] = useState("");
 
@@ -42,7 +46,7 @@ export default function ProjectsPage() {
     try {
       const project = await api<Project>("/api/projects/", {
         method: "POST",
-        body: JSON.stringify({ title, concept, genre, tone, ending_intent: endingIntent, delivery, visual_style: visualStyle }),
+        body: JSON.stringify({ title, concept, genre, subgenre, setting, tone, ending_intent: endingIntent, episode_count_target: episodeCount === "auto" ? null : Number(episodeCount), episode_duration_seconds: Number(episodeDuration), delivery, visual_style: visualStyle }),
       });
       window.location.href = `/projects/${project.id}`;
     } catch (err) {
@@ -102,6 +106,37 @@ export default function ProjectsPage() {
           Concept {conceptMode === "ai" ? "retenu (modifiable)" : ""}
           <textarea className="mt-1 min-h-28 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white outline-none" placeholder="Genre / Concept / Début / Fin" value={concept} onChange={(e) => setConcept(e.target.value)} required />
         </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-[#9aa3b2]">Genre principal
+            <select value={genre} onChange={(e) => setGenre(e.target.value)} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white">
+              <option value="">Libre / à déterminer</option>
+              {["Drame familial","Drame social","Romance","Comédie","Comédie romantique","Mystère","Thriller","Policier","Crime","Action","Aventure","Fantastique","Fantasy","Science-fiction","Horreur","Suspense","Jeunesse","Conte","Historique","Biographique","Musical","Tranche de vie","Spiritualité"].map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs text-[#9aa3b2]">Sous-genre
+            <select value={subgenre} onChange={(e) => setSubgenre(e.target.value)} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white">
+              <option value="">Aucun / libre</option>
+              {["Drame familial","Drame social","Romance","Comédie","Comédie romantique","Mystère","Thriller","Policier","Crime","Action","Aventure","Fantastique","Fantasy","Science-fiction","Horreur","Suspense","Jeunesse","Conte","Historique","Biographique","Musical","Tranche de vie","Spiritualité"].map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="block text-xs text-[#9aa3b2]">Lieu / cadre principal
+          <input value={setting} onChange={(e) => setSetting(e.target.value)} placeholder="Ex. Kinshasa, RDC" maxLength={160} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white" />
+          <span className="mt-1 block text-[11px]">Ce cadre devient canonique pour le Showrunner et la Bible.</span>
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-[#9aa3b2]">Structure
+            <select value={episodeCount} onChange={(e) => setEpisodeCount(e.target.value)} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white">
+              <option value="auto">Automatique · nombre naturel</option>
+              <option value="1">1 épisode court</option><option value="3">3 épisodes courts</option><option value="5">5 épisodes courts</option><option value="10">10 épisodes courts</option>
+            </select>
+          </label>
+          <label className="block text-xs text-[#9aa3b2]">Durée cible / épisode
+            <select value={episodeDuration} onChange={(e) => setEpisodeDuration(e.target.value)} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white">
+              <option value="30">30 secondes</option><option value="45">45 secondes</option><option value="60">60 secondes</option><option value="90">90 secondes</option><option value="120">2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option>
+            </select>
+          </label>
+        </div>
         <div>
           <p className="mb-2 text-sm font-medium text-[#e8c36a]">Type de rendu</p>
           <div className="grid grid-cols-2 gap-2">
