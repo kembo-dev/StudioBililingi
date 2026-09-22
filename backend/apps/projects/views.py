@@ -88,8 +88,19 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response({"detail": "character_key est requis"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             asset = regenerate_character_ref(project, character_key)
-        except (ValueError, RuntimeError) as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            message = str(exc)
+            if "429" in message and ("RESOURCE_EXHAUSTED" in message or "Resource exhausted" in message):
+                return Response(
+                    {
+                        "detail": "Quota/capacité Vertex AI temporairement épuisé. L'ancienne référence est conservée.",
+                        "retryable": True,
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            if isinstance(exc, (ValueError, RuntimeError)):
+                return Response({"detail": message}, status=status.HTTP_400_BAD_REQUEST)
+            raise
         return Response({
             "id": asset.id,
             "role": asset.role,
