@@ -99,6 +99,22 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["post"], url_path="delete-reference")
+    def delete_reference_action(self, request, pk=None):
+        from apps.projects.visuals import delete_visual_ref
+
+        project = self.get_object()
+        asset_id = request.data.get("asset_id")
+        if not asset_id:
+            return Response({"detail": "asset_id est requis"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            delete_visual_ref(project, int(asset_id))
+        except (TypeError, ValueError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        project = self.get_queryset().get(pk=project.pk)
+        return Response(ProjectSerializer(project).data)
+
     @action(detail=True, methods=["post"], url_path="regenerate-character-ref")
     def regenerate_character_ref_action(self, request, pk=None):
         from apps.projects.visuals import regenerate_character_ref
