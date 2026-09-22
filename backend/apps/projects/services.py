@@ -199,6 +199,36 @@ def _entity_keys(value) -> list[str]:
     return keys
 
 
+def _scene_contract_errors(rows: list[dict]) -> list[str]:
+    errors = []
+    locations_by_scene: dict[int, set[str]] = {}
+    scene_by_location_run = None
+    previous_location = None
+    for position, row in enumerate(rows, start=1):
+        try:
+            scene_index = int(row.get("scene_index") or 1)
+        except (TypeError, ValueError):
+            scene_index = 1
+        raw_location = row.get("location_id") or row.get("location")
+        if isinstance(raw_location, dict):
+            raw_location = raw_location.get("id") or raw_location.get("key") or raw_location.get("name")
+        location = str(raw_location or "").strip()
+        if location:
+            locations_by_scene.setdefault(scene_index, set()).add(location)
+            if previous_location and location != previous_location and scene_by_location_run == scene_index:
+                errors.append(
+                    f"Beat {position}: changement de lieu {previous_location} -> {location} sans nouvelle scène"
+                )
+            previous_location = location
+            scene_by_location_run = scene_index
+    for scene_index, locations in locations_by_scene.items():
+        if len(locations) > 1:
+            errors.append(
+                f"Scène {scene_index}: plusieurs lieux incompatibles dans la même scène ({', '.join(sorted(locations))})"
+            )
+    return errors
+
+
 @transaction.atomic
 def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
     """Persist a new immutable segmentation version.
@@ -208,6 +238,9 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
     """
     project = episode.season.project
     rows = [{"text": row} if isinstance(row, str) else dict(row) for row in chunks]
+    contract_errors = _scene_contract_errors(rows)
+    if contract_errors:
+        raise ValueError("Segmentation refusée: " + "; ".join(contract_errors))
     script = Script.objects.create(
         episode=episode,
         version=episode.scripts.count() + 1,
