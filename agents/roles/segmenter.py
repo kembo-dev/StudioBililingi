@@ -12,7 +12,7 @@ class BeatSegmenter:
     def __init__(self):
         self.text = get_text()
 
-    def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None, feedback: str = "", narrative_contract: dict | None = None) -> dict:
+    def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None, feedback: str = "", narrative_contract: dict | None = None, scene_plan: list[dict] | None = None) -> dict:
         mode_rules = {
             "conversation": (
                 "CONVERSATION: chaque beat contenant une parole doit fournir speaker_id avec l'id CANONIQUE exact "
@@ -47,13 +47,14 @@ class BeatSegmenter:
                 "character_ids, speaker_id, prop_ids, camera {shot_size, angle, move, lens}, emotion, dialogue, "
                 "continuity, duration_seconds, video_prompt, negative_prompt, backend. "
                 "Utilise uniquement les ids de personnages/lieux/objets présents dans la bible quand ils existent. "
-                "event_id doit être l'identifiant EVxx exact du NARRATIVE CONTRACT correspondant à l'information narrative réellement avancée par le beat. Plusieurs beats peuvent partager un event_id uniquement si chacun montre une étape visuelle distincte nécessaire; n'ajoute jamais des beats philosophiques ou moraux qui répètent la même information pour remplir la durée. "
+                "SCENE PLAN LOCK: le SCENE PLAN est déjà validé et canonique. Chaque beat doit reprendre exactement un scene_index existant, son location_id et son time_of_day. Ne crée, ne fusionne, ne déplace et ne renumérote aucune scène. "
+                "event_id doit être l'identifiant EVxx exact du NARRATIVE CONTRACT correspondant à l'information narrative réellement avancée par le beat et doit être autorisé par event_ids de la scène choisie. Plusieurs beats peuvent partager un event_id uniquement si chacun montre une étape visuelle distincte nécessaire; n'ajoute jamais des beats philosophiques ou moraux qui répètent la même information pour remplir la durée. "
                 "video_prompt décrit exactement ce qui doit être visible à l'écran, qui parle, la réaction visible "
                 "et l'identité/continuité à préserver. "
                 f"{mode_rules.get(form, mode_rules['storytell'])}"
             ),
             user=(
-                f"MODE: {form}\n\nBIBLE:\n{bible or {}}\n\nNARRATIVE CONTRACT:\n{narrative_contract or {}}\n\n"
+                f"MODE: {form}\n\nBIBLE:\n{bible or {}}\n\nNARRATIVE CONTRACT:\n{narrative_contract or {}}\n\nSCENE PLAN VERROUILLE:\n{scene_plan or []}\n\n"
                 f"CORRECTIONS OBLIGATOIRES DE LA PASSE PRECEDENTE:\n{feedback or 'Aucune'}\n\n"
                 f"SCRIPT:\n{script}"
             ),
