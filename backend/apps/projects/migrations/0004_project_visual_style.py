@@ -13,6 +13,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ("realistic", "Réaliste cinématographique"),
+                    ("realistic_imperfect", "Réaliste avec imperfections réelles"),
                     ("cartoon", "Cartoon"),
                     ("manga", "Manga / Anime"),
                     ("3d_animation", "Animation 3D"),
