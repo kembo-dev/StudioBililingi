@@ -125,7 +125,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if not entity_type or not entity_key:
             return Response({"detail": "entity_type et entity_key sont requis"}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            asset = regenerate_visual_ref(project, entity_type, entity_key)
+            asset = regenerate_visual_ref(project, entity_type, entity_key, custom_prompt=request.data.get("custom_prompt", ""))
         except Exception as exc:
             message = str(exc)
             if "429" in message and ("RESOURCE_EXHAUSTED" in message or "Resource exhausted" in message):
