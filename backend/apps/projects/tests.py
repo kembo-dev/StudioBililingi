@@ -366,16 +366,36 @@ class ProductionPipelineTests(TestCase):
         self.assertTrue(rows[0]["text"].startswith("CLAIRE MOREAU"))
         self.assertTrue(rows[1]["text"].startswith("LEO DUBOIS"))
 
-    def test_long_dialogue_split_does_not_duplicate_full_dialogue(self):
+    def test_long_single_sentence_dialogue_is_not_cut_mid_sentence(self):
         source = "CLAIRE MOREAU : " + " ".join(f"mot{i}" for i in range(70))
         rows = normalize_beats([{
             "text": source,
             "dialogue": source,
             "scene_index": 1,
         }], form="conversation", resolve_character_names=lambda row: ["Claire Moreau"])
+
+        # A single oversized sentence stays intact so the semantic repair pass
+        # can rewrite it naturally instead of producing broken dialogue clips.
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["text"], source)
+        self.assertEqual(rows[0]["dialogue"], source)
+        self.assertGreater(len(rows[0]["text"].split()), 32)
+
+    def test_long_multi_sentence_dialogue_splits_only_on_sentence_boundaries(self):
+        source = (
+            "CLAIRE MOREAU : " + " ".join(f"a{i}" for i in range(18)) + ". "
+            + " ".join(f"b{i}" for i in range(18)) + ". "
+            + " ".join(f"c{i}" for i in range(18)) + "."
+        )
+        rows = normalize_beats([{
+            "text": source,
+            "dialogue": source,
+            "scene_index": 1,
+        }], form="conversation", resolve_character_names=lambda row: ["Claire Moreau"])
+
         self.assertGreater(len(rows), 1)
+        self.assertTrue(all(row["text"].endswith(".") for row in rows))
         self.assertTrue(all(len(row["text"].split()) <= 32 for row in rows))
-        self.assertTrue(all(len(row["dialogue"].split()) <= 35 for row in rows))
 
     def test_orphan_dialogue_fragment_inherits_previous_speaker(self):
         self.project.delivery = "conversation"
