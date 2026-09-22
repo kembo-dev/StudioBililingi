@@ -209,3 +209,31 @@ def add_manual_ref(
         bible.save(update_fields=["payload"])
 
     return entity
+
+
+
+def delete_visual_ref(project: Project, asset_id: int) -> None:
+    asset = Asset.objects.filter(
+        project=project,
+        pk=asset_id,
+        role__in=(Asset.Role.CHARACTER_REF, Asset.Role.LOCATION_REF, Asset.Role.PROP_REF),
+    ).first()
+    if asset is None:
+        raise ValueError("Référence visuelle introuvable dans ce projet")
+
+    uri = asset.uri
+    asset.delete()
+
+    # Delete only Studio-managed local media. The canonical Bible entity stays
+    # intact, so "Générer les refs" can recreate the missing image later.
+    if uri and str(uri).startswith("/media/"):
+        media_root = Path(getattr(settings, "MEDIA_ROOT", "") or "").resolve()
+        candidate = (media_root / str(uri)[len("/media/"):]).resolve()
+        try:
+            candidate.relative_to(media_root)
+        except ValueError:
+            return
+        try:
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
