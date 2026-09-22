@@ -68,52 +68,63 @@ def generate_refs(project: Project) -> list:
 
 
 
-def regenerate_character_ref(project: Project, character_key: str):
+def regenerate_visual_ref(project: Project, entity_type: str, entity_key: str):
     bible = project.bibles.first()
     if bible is None or not bible.locked:
         raise ValueError("Verrouille la bible avant les références visuelles")
 
-    character = project.characters.filter(key=character_key).first()
-    if character is None:
-        raise ValueError("Personnage introuvable dans ce projet")
+    entity_type = str(entity_type or "").strip().lower()
+    entity_key = str(entity_key or "").strip()
+    models = {"character": Character, "location": Location, "prop": Prop}
+    if entity_type not in models:
+        raise ValueError("Type de référence invalide")
+
+    entity = models[entity_type].objects.filter(project=project, key=entity_key).first()
+    if entity is None:
+        raise ValueError("Élément introuvable dans ce projet")
 
     from agents.roles.art_director import ArtDirector
 
     artist = ArtDirector()
     project_key = f"{project.id}-{project.slug}"
-    uri = artist.character_ref(
-        name=character.name,
-        look=character.look,
-        role=character.role,
-        project_key=project_key,
-        visual_style=project.visual_style,
-    )
-    old_assets = list(
-        Asset.objects.filter(
-            project=project,
-            role=Asset.Role.CHARACTER_REF,
-            meta__key=character.key,
+    if entity_type == "character":
+        role = Asset.Role.CHARACTER_REF
+        uri = artist.character_ref(
+            name=entity.name, look=entity.look, role=entity.role,
+            project_key=project_key, visual_style=project.visual_style,
         )
-    )
-    old_uris = [asset.uri for asset in old_assets]
+    elif entity_type == "location":
+        role = Asset.Role.LOCATION_REF
+        uri = artist.location_ref(
+            name=entity.name, look=entity.look, time_of_day=entity.time_of_day,
+            project_key=project_key, visual_style=project.visual_style,
+        )
+    else:
+        role = Asset.Role.PROP_REF
+        uri = artist.prop_ref(
+            name=entity.name, look=entity.look,
+            project_key=project_key, visual_style=project.visual_style,
+        )
 
+    old_assets = list(Asset.objects.filter(project=project, role=role, meta__key=entity.key))
+    old_uris = [asset.uri for asset in old_assets]
     with transaction.atomic():
         Asset.objects.filter(pk__in=[asset.pk for asset in old_assets]).delete()
         asset = Asset.objects.create(
             project=project,
             kind=Asset.Kind.IMAGE,
-            role=Asset.Role.CHARACTER_REF,
+            role=role,
             uri=uri,
             provider=getattr(artist.image, "provider_id", ""),
             meta={
-                "key": character.key,
-                "name": character.name,
-                "entity": "character",
+                "key": entity.key,
+                "name": entity.name,
+                "entity": entity_type,
+                "visual_style": project.visual_style,
                 "regenerated": True,
             },
         )
 
-    # Remove obsolete local files only after the replacement is committed.
     media_root = Path(getattr(settings, "MEDIA_ROOT", "") or "").resolve()
     for old_uri in old_uris:
         if not old_uri or old_uri == uri or not str(old_uri).startswith("/media/"):
@@ -128,6 +139,11 @@ def regenerate_character_ref(project: Project, character_key: str):
         except OSError:
             pass
     return asset
+
+
+def regenerate_character_ref(project: Project, character_key: str):
+    # Backward-compatible wrapper for existing callers.
+    return regenerate_visual_ref(project, "character", character_key)
 
 
 
