@@ -504,6 +504,28 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(errors, [])
 
 
+    def test_project_constraints_payload_exposes_canonical_story_format(self):
+        from apps.projects.services import project_constraints_payload
+
+        self.project.genre = "Drame familial"
+        self.project.subgenre = "Mystère"
+        self.project.setting = "Kinshasa, RDC"
+        self.project.episode_count_target = 5
+        self.project.episode_duration_seconds = 60
+        self.project.delivery = "voix_off"
+        self.project.visual_style = "realistic"
+        self.project.save()
+
+        payload = project_constraints_payload(self.project)
+        self.assertEqual(payload["genre"], "Drame familial")
+        self.assertEqual(payload["subgenre"], "Mystère")
+        self.assertEqual(payload["setting"], "Kinshasa, RDC")
+        self.assertEqual(payload["episode_count_target"], 5)
+        self.assertEqual(payload["episode_duration_seconds"], 60)
+        self.assertEqual(payload["delivery"], "voix_off")
+        self.assertEqual(payload["visual_style"], "realistic")
+
+
     def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
         before_scripts = Script.objects.filter(episode=self.episode).count()
         before_beats = Beat.objects.filter(episode=self.episode).count()
