@@ -161,6 +161,47 @@ def merge_short_rows(rows: list[dict]) -> list[dict]:
     return result
 
 
+def inherit_orphan_dialogue_continuations(rows: list[dict]) -> list[dict]:
+    """Carry the previous speaker onto tiny continuation fragments.
+
+    Segmenters sometimes split a spoken sentence into two beats and omit the
+    speaker on the second fragment (e.g. "CHLOÉ: Merci..." / "Tu as raison...").
+    We only inherit when the previous row is explicit dialogue, both rows are in
+    the same scene, and the orphan is short enough to plausibly be a continuation.
+    """
+    result: list[dict] = []
+    for raw in rows:
+        row = deepcopy(raw)
+        text = str(row.get("text") or "").strip()
+        explicit_here = speaker_label(text) or speaker_label(str(row.get("dialogue") or ""))
+        if (
+            result
+            and not explicit_here
+            and not row.get("dialogue")
+            and len(words(text)) <= 10
+            and same_scene(result[-1], row)
+        ):
+            prev = result[-1]
+            prev_label = speaker_label(str(prev.get("dialogue") or "")) or speaker_label(str(prev.get("text") or ""))
+            prev_speaker_id = prev.get("speaker_id")
+            if prev_label or prev_speaker_id:
+                # Do not reinterpret obvious visual/action directions as speech.
+                actionish = bool(re.match(
+                    r"^(le|la|les|un|une|il|elle|ils|elles|plan|caméra|camera|submersible|thomas\s+(entre|s'approche|tend|verse)|chloé\s+(prend|sourit|regarde))\b",
+                    text,
+                    flags=re.I,
+                ))
+                if not actionish:
+                    label = prev_label or str(prev_speaker_id)
+                    row["dialogue"] = f"{label.upper()} : {text}"
+                    row["text"] = row["dialogue"]
+                    if prev_speaker_id:
+                        row["speaker_id"] = prev_speaker_id
+                    row["speaker_inherited"] = True
+        result.append(row)
+    return result
+
+
 def normalize_beats(
     chunks: list[dict],
     *,
@@ -197,6 +238,7 @@ def normalize_beats(
         normalized.extend(merge_short_rows(action_buffer))
 
     if form == "conversation":
+        normalized = inherit_orphan_dialogue_continuations(normalized)
         for row in normalized:
             dialogue = str(row.get("dialogue") or "").strip()
             text = str(row.get("text") or "").strip()
