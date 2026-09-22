@@ -461,6 +461,29 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(len(beat.scene.heading), Scene._meta.get_field("heading").max_length)
         self.assertEqual(len(beat.scene.time_of_day), Scene._meta.get_field("time_of_day").max_length)
 
+    def test_scene_contract_rejects_location_change_without_new_scene(self):
+        persist_bible(self.project, {"characters": [], "locations": [
+            {"id": "maison", "name": "Maison", "look": "interieur"},
+            {"id": "route", "name": "Route", "look": "rue"},
+        ], "props": []})
+        with self.assertRaisesMessage(ValueError, "changement de lieu"):
+            persist_beats(self.episode, [
+                {"text": "Le personnage quitte la maison.", "scene_index": 1, "location_id": "maison"},
+                {"text": "Le personnage marche dans la rue.", "scene_index": 1, "location_id": "route"},
+            ])
+
+    def test_scene_contract_accepts_location_change_with_new_scene(self):
+        persist_bible(self.project, {"characters": [], "locations": [
+            {"id": "maison", "name": "Maison", "look": "interieur"},
+            {"id": "route", "name": "Route", "look": "rue"},
+        ], "props": []})
+        beats = persist_beats(self.episode, [
+            {"text": "Le personnage quitte la maison.", "scene_index": 1, "location_id": "maison"},
+            {"text": "Le personnage marche dans la rue.", "scene_index": 2, "location_id": "route"},
+        ])
+        self.assertEqual(len(beats), 2)
+        self.assertNotEqual(beats[0].scene_id, beats[1].scene_id)
+
     def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
         before_scripts = Script.objects.filter(episode=self.episode).count()
         before_beats = Beat.objects.filter(episode=self.episode).count()
