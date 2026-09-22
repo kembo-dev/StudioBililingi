@@ -12,7 +12,7 @@ class BeatSegmenter:
     def __init__(self):
         self.text = get_text()
 
-    def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None, feedback: str = "") -> dict:
+    def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None, feedback: str = "", narrative_contract: dict | None = None) -> dict:
         mode_rules = {
             "conversation": (
                 "CONVERSATION: chaque beat contenant une parole doit fournir speaker_id avec l'id CANONIQUE exact "
@@ -43,16 +43,17 @@ class BeatSegmenter:
                 "découpée à une pause naturelle avec une "
                 "action ou réaction visible pour chaque partie. Respecte les changements de scène, de lieu, de locuteur "
                 "et d'action. Retourne JSON {\"beats\": [...]} uniquement. Chaque beat doit fournir: "
-                "text, scene_index, scene_heading, scene_summary, location_id, time_of_day, lighting, "
+                "text, event_id, scene_index, scene_heading, scene_summary, location_id, time_of_day, lighting, "
                 "character_ids, speaker_id, prop_ids, camera {shot_size, angle, move, lens}, emotion, dialogue, "
                 "continuity, duration_seconds, video_prompt, negative_prompt, backend. "
                 "Utilise uniquement les ids de personnages/lieux/objets présents dans la bible quand ils existent. "
+                "event_id doit être l'identifiant EVxx exact du NARRATIVE CONTRACT correspondant à l'information narrative réellement avancée par le beat. Plusieurs beats peuvent partager un event_id uniquement si chacun montre une étape visuelle distincte nécessaire; n'ajoute jamais des beats philosophiques ou moraux qui répètent la même information pour remplir la durée. "
                 "video_prompt décrit exactement ce qui doit être visible à l'écran, qui parle, la réaction visible "
                 "et l'identité/continuité à préserver. "
                 f"{mode_rules.get(form, mode_rules['storytell'])}"
             ),
             user=(
-                f"MODE: {form}\n\nBIBLE:\n{bible or {}}\n\n"
+                f"MODE: {form}\n\nBIBLE:\n{bible or {}}\n\nNARRATIVE CONTRACT:\n{narrative_contract or {}}\n\n"
                 f"CORRECTIONS OBLIGATOIRES DE LA PASSE PRECEDENTE:\n{feedback or 'Aucune'}\n\n"
                 f"SCRIPT:\n{script}"
             ),
