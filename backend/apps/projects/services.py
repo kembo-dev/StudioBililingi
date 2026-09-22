@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from django.db import transaction
 from django.utils.text import slugify
 
 from apps.accounts.models import Organization
@@ -198,6 +199,7 @@ def _entity_keys(value) -> list[str]:
     return keys
 
 
+@transaction.atomic
 def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
     """Persist a new immutable segmentation version.
 
