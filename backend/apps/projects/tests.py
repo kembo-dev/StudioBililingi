@@ -562,6 +562,31 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(errors, [])
 
 
+    def test_lock_scene_plan_keeps_only_one_locked_version(self):
+        from apps.story.models import ScenePlan, Script
+        from apps.projects.models import NarrativeContract, NarrativeEvent
+        from apps.projects.services import lock_scene_plan, persist_bible
+
+        bible = persist_bible(self.project, {
+            "characters": [{"id": "leo", "name": "Leo"}],
+            "locations": [{"id": "maison", "name": "Maison", "look": "interieur"}],
+            "props": [],
+        })
+        bible.locked = True
+        bible.save(update_fields=["locked"])
+        contract = NarrativeContract.objects.create(project=self.project)
+        NarrativeEvent.objects.create(contract=contract, key="EV01", position=1, description="Leo se prepare", episode_number=self.episode.number)
+        script = Script.objects.create(episode=self.episode, version=1, fountain="INT. MAISON - MATIN")
+        payload = [{"index": 1, "heading": "INT. MAISON - MATIN", "summary": "Leo se prepare", "location_id": "maison", "time_of_day": "matin", "character_ids": ["leo"], "prop_ids": [], "event_ids": ["EV01"], "target_seconds": 60}]
+        first = ScenePlan.objects.create(episode=self.episode, script=script, version=1, payload=payload, locked=True)
+        second = ScenePlan.objects.create(episode=self.episode, script=script, version=2, payload=payload)
+
+        locked = lock_scene_plan(self.episode, second.id)
+        first.refresh_from_db()
+        self.assertTrue(locked.locked)
+        self.assertFalse(first.locked)
+
+
     def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
         before_scripts = Script.objects.filter(episode=self.episode).count()
         before_beats = Beat.objects.filter(episode=self.episode).count()
