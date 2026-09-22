@@ -377,3 +377,30 @@ class ProductionPipelineTests(TestCase):
         self.assertTrue(all(len(row["text"].split()) <= 32 for row in rows))
         self.assertTrue(all(len(row["dialogue"].split()) <= 35 for row in rows))
 
+    def test_orphan_dialogue_fragment_inherits_previous_speaker(self):
+        self.project.delivery = "conversation"
+        self.project.save(update_fields=["delivery"])
+        persist_bible(self.project, {
+            "characters": [{"id": "chloe", "name": "Chloé", "aliases": ["CHLOÉ"]}],
+            "locations": [], "props": [],
+        })
+        resolver = CharacterResolver(self.project)
+        rows = normalize_beats([
+            {
+                "text": "CHLOÉ : Elle prend la tasse. Merci d'être là.",
+                "dialogue": "CHLOÉ : Merci d'être là.",
+                "character_ids": ["chloe"],
+                "scene_index": 1,
+            },
+            {
+                "text": "Tu as probablement raison...",
+                "character_ids": ["chloe"],
+                "scene_index": 1,
+            },
+        ], form="conversation", resolve_character_names=resolver.names_for_row)
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1]["speaker_id"], "chloe")
+        self.assertTrue(rows[1]["dialogue"].startswith("CHLOÉ"))
+        self.assertTrue(rows[1]["speaker_inherited"])
+
