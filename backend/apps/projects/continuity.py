@@ -221,6 +221,7 @@ def render_beat(beat: Beat) -> Beat:
             ingredients=pack["uris"],
             duration_seconds=float(beat.duration_seconds),
             aspect_ratio=project.aspect_ratio,
+            project_key=f"{project.id}-{project.slug}",
         )
         Asset.objects.create(
             project=project,
