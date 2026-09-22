@@ -1,8 +1,12 @@
 from celery import shared_task
 
 
-@shared_task
-def run_studio_job(job_id: int) -> dict:
+@shared_task(
+    bind=True,
+    autoretry_for=(),
+    max_retries=5,
+)
+def run_studio_job(self, job_id: int) -> dict:
     from apps.jobs.models import Job
     from apps.projects.continuity import render_beat
     from apps.projects.models import Project
@@ -35,7 +39,24 @@ def run_studio_job(job_id: int) -> dict:
         job.save(update_fields=["status", "result", "updated_at"])
         return job.result
     except Exception as exc:
+        message = str(exc)
+        quota_exhausted = "429" in message and (
+            "RESOURCE_EXHAUSTED" in message or "Resource exhausted" in message
+        )
+        if quota_exhausted and self.request.retries < self.max_retries:
+            # Keep the durable Job retryable instead of marking it failed while
+            # Vertex is temporarily out of capacity. Celery will retry the same
+            # resumable job; generate_refs skips assets already persisted.
+            countdown = min(900, 60 * (2 ** self.request.retries))
+            job.status = Job.Status.QUEUED
+            job.error = (
+                f"Vertex AI temporairement saturé; nouvelle tentative dans {countdown}s "
+                f"({self.request.retries + 1}/{self.max_retries})."
+            )
+            job.save(update_fields=["status", "error", "updated_at"])
+            raise self.retry(exc=exc, countdown=countdown)
+
         job.status = Job.Status.FAILED
-        job.error = str(exc)
+        job.error = message
         job.save(update_fields=["status", "error", "updated_at"])
         raise
