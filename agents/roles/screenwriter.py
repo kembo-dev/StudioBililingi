@@ -17,6 +17,7 @@ class Screenwriter:
         episode: dict,
         form: str = "storytell",
         continuity: list[dict] | None = None,
+        narrative_contract: dict | None = None,
     ) -> dict:
         shapes = {
             "conversation": (
@@ -51,7 +52,7 @@ class Screenwriter:
                 "Si l'épisode exige un nouvel élément visuel mineur, décris-le explicitement dans scenes mais ne transforme "
                 "jamais cet ajout en nouvelle prémisse de la série. L'arc doit rester une conséquence directe du concept. "
                 "SCENE CONTRACT: crée une nouvelle scène dès que le lieu ou le temps change. Chaque scène doit avoir un location_id canonique correspondant au lieu réellement montré; ne saute jamais un trajet ou un lieu intermédiaire décrit par l'action. "
-                "EVENT CONTRACT: l'épisode doit seulement accomplir les événements décrits dans sa logline/son arc; ne recommence pas le début de l'histoire pour remplir la durée et ne rejoue aucun événement déjà présent dans la continuité. "
+                "EVENT CONTRACT: respecte strictement le NARRATIVE CONTRACT, notamment point_of_view, narrator, tense et events. En voix off, si point_of_view=third_person et narrator=external, le narrateur ne doit JAMAIS parler comme le protagoniste avec je/moi/mon/ma. L'épisode doit seulement accomplir les événements prévus; ne recommence pas le début de l'histoire pour remplir la durée et ne rejoue aucun événement déjà présent dans la continuité. "
                 "La continuité canonique des épisodes précédents est une contrainte: ne renomme pas un lieu, "
                 "ne répète pas un événement déjà accompli et ne prétends pas qu'une action passée a eu lieu si elle "
                 "n'apparaît pas dans cette continuité. Français naturel."
@@ -60,6 +61,7 @@ class Screenwriter:
                 f"MODE DE LIVRAISON: {form}\n\n"
                 f"CONCEPT:\n{concept}\n\n"
                 f"BIBLE:\n{bible}\n\n"
+                f"NARRATIVE CONTRACT VERROUILLE:\n{narrative_contract or {}}\n\n"
                 f"CONTINUITE CANONIQUE DES EPISODES PRECEDENTS:\n{continuity or []}\n\n"
                 f"EPISODE:\n{episode}"
             ),
