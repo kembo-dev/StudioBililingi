@@ -21,7 +21,7 @@ def _ensure_org(name: str) -> Organization:
     return org
 
 
-def create_project(*, title: str, concept: str, genre: str = "", tone: str = "", ending_intent: str = "", delivery: str = "storytell", organization_name: str = "Studio") -> Project:
+def create_project(*, title: str, concept: str, genre: str = "", tone: str = "", ending_intent: str = "", delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
     org = _ensure_org(organization_name)
     base = slugify(title) or "projet"
     slug = base
@@ -31,7 +31,7 @@ def create_project(*, title: str, concept: str, genre: str = "", tone: str = "",
         n += 1
     project = Project.objects.create(
         organization=org, title=title, slug=slug, concept=concept,
-        genre=genre, tone=tone, ending_intent=ending_intent, delivery=delivery, status=Project.Status.ACTIVE,
+        genre=genre, tone=tone, ending_intent=ending_intent, delivery=delivery, visual_style=visual_style, status=Project.Status.ACTIVE,
     )
     Season.objects.create(project=project, number=1, title="Saison 1", premise=concept[:400])
     return project
