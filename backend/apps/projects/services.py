@@ -9,7 +9,7 @@ from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import Project, Season
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
-from apps.projects.beat_normalizer import normalize_beats
+from apps.projects.beat_normalizer import normalize_beats, speaker_label, _speaker_occurrences
 from apps.projects.character_resolver import CharacterResolver, identity_token, normalize_bible_payload
 from apps.projects.story_normalizer import bible_errors, normalize_story_bible, script_conversation_errors
 
@@ -664,6 +664,11 @@ def _segmentation_errors(chunks: list, *, form: str, project: Project) -> list[s
         if form == "conversation":
             dialogue = str(row.get("dialogue") or "").strip()
             text_value = str(row.get("text") or "").strip()
+            labels = _speaker_occurrences(text_value)
+            if len(labels) > 1:
+                errors.append(f"beat {i}: plusieurs locuteurs dans le même beat")
+            if dialogue and len(_speaker_occurrences(dialogue)) > 1:
+                errors.append(f"beat {i}: plusieurs locuteurs dans dialogue")
             if dialogue:
                 speaker = resolver.resolve(row.get("speaker_id"))
                 if speaker is None:
