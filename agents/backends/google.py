@@ -168,40 +168,52 @@ class GoogleVideoBackend:
         text = prompt
         if _usable(start_frame):
             text += f"\nStart frame / location plate: {start_frame}"
+        if _usable(end_frame):
+            text += f"\nEnd frame target: {end_frame}"
         if usable:
             text += "\nVisual ingredients (keep identity): " + ", ".join(usable)
+
+        config_kwargs = {"aspect_ratio": aspect_ratio}
+        # Veo accepts a small discrete set of durations. Keep the requested
+        # beat duration when the installed SDK exposes duration_seconds.
+        requested_duration = max(4, min(8, int(round(float(duration_seconds or 8)))))
+        config_kwargs["duration_seconds"] = requested_duration
         try:
-            config = types.GenerateVideosConfig(aspect_ratio=aspect_ratio)
-        except TypeError:
-            config = None
+            config = types.GenerateVideosConfig(**config_kwargs)
+        except (TypeError, ValueError):
+            config_kwargs.pop("duration_seconds", None)
+            config = types.GenerateVideosConfig(**config_kwargs)
+
         client = _client()
-        kwargs = {"model": model, "prompt": text}
-        if config is not None:
-            kwargs["config"] = config
-        operation = client.models.generate_videos(**kwargs)
-        timeout = int(os.getenv("VEO_TIMEOUT_SECONDS", "300"))
-        started = time.time()
-        while not getattr(operation, "done", False):
-            if time.time() - started > timeout:
-                raise TimeoutError(f"Veo timed out after {timeout}s")
-            time.sleep(8)
-            operation = client.operations.get(operation)
-        response = getattr(operation, "response", None) or getattr(operation, "result", None)
-        videos = getattr(response, "generated_videos", None) or []
-        if not videos:
-            raise RuntimeError("Veo returned no video")
-        video = videos[0]
-        video_file = getattr(video, "video", None)
-        data = getattr(video_file, "video_bytes", None) if video_file else None
-        if data:
-            if isinstance(data, str):
-                import base64
-                data = base64.b64decode(data)
-            return _save_bytes("clips", data, ".mp4")
-        uri = getattr(video_file, "uri", None) if video_file else getattr(video, "uri", None)
-        if uri:
-            return uri
-        raise RuntimeError("Veo video had neither bytes nor uri")
+        try:
+            kwargs = {"model": model, "prompt": text, "config": config}
+            operation = _with_quota_retry(lambda: client.models.generate_videos(**kwargs))
+            timeout = int(os.getenv("VEO_TIMEOUT_SECONDS", "600"))
+            started = time.time()
+            while not getattr(operation, "done", False):
+                if time.time() - started > timeout:
+                    raise TimeoutError(f"Veo timed out after {timeout}s")
+                time.sleep(8)
+                operation = client.operations.get(operation)
+
+            response = getattr(operation, "response", None) or getattr(operation, "result", None)
+            videos = getattr(response, "generated_videos", None) or []
+            if not videos:
+                raise RuntimeError(f"Veo returned no video ({model})")
+            video = videos[0]
+            video_file = getattr(video, "video", None)
+            data = getattr(video_file, "video_bytes", None) if video_file else None
+            if data:
+                if isinstance(data, str):
+                    import base64
+                    data = base64.b64decode(data)
+                return _save_bytes("clips", data, ".mp4")
+            uri = getattr(video_file, "uri", None) if video_file else getattr(video, "uri", None)
+            if uri:
+                return uri
+            raise RuntimeError("Veo video had neither bytes nor uri")
+        finally:
+            client.close()
 
 
 class GoogleAudioBackend:
