@@ -68,12 +68,20 @@ def _media_root() -> Path:
     return path
 
 
-def _save_bytes(folder: str, data: bytes, suffix: str) -> str:
-    directory = _media_root() / folder
+def _safe_media_segment(value: str | None, fallback: str = "unassigned") -> str:
+    value = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(value or "").strip()).strip("-._")
+    return value or fallback
+
+
+def _save_bytes(folder: str, data: bytes, suffix: str, *, project_key: str | None = None) -> str:
+    relative = Path(folder)
+    if project_key:
+        relative /= _safe_media_segment(project_key)
+    directory = _media_root() / relative
     directory.mkdir(parents=True, exist_ok=True)
     name = f"{uuid.uuid4().hex}{suffix}"
     (directory / name).write_bytes(data)
-    return f"/media/{folder}/{name}"
+    return f"/media/{relative.as_posix()}/{name}"
 
 
 def _usable(uri: str | None) -> bool:
@@ -109,7 +117,7 @@ class GoogleTextBackend:
 class GoogleImageBackend:
     provider_id = "google-nano-banana"
 
-    def generate(self, prompt: str, refs: list[str] | None = None) -> str:
+    def generate(self, prompt: str, refs: list[str] | None = None, *, project_key: str | None = None) -> str:
         from google.genai import types
 
         model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
@@ -137,7 +145,7 @@ class GoogleImageBackend:
                         import base64
                         data = base64.b64decode(data)
                     suffix = ".jpg" if "jpeg" in mime else ".png"
-                    return _save_bytes("refs", data, suffix)
+                    return _save_bytes("refs", data, suffix, project_key=project_key)
 
             text = getattr(response, "text", "") or ""
             raise RuntimeError(
@@ -160,6 +168,7 @@ class GoogleVideoBackend:
         ingredients=None,
         duration_seconds=8,
         aspect_ratio="16:9",
+        project_key: str | None = None,
     ) -> str:
         from google.genai import types
 
@@ -207,7 +216,7 @@ class GoogleVideoBackend:
                 if isinstance(data, str):
                     import base64
                     data = base64.b64decode(data)
-                return _save_bytes("clips", data, ".mp4")
+                return _save_bytes("clips", data, ".mp4", project_key=project_key)
             uri = getattr(video_file, "uri", None) if video_file else getattr(video, "uri", None)
             if uri:
                 return uri
