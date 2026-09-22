@@ -207,3 +207,23 @@ class ProductionPipelineTests(TestCase):
         }], form="conversation", project=self.project)
         self.assertEqual(errors, [])
 
+    def test_conversation_segmentation_sets_canonical_speaker_id(self):
+        persist_bible(self.project, {
+            "characters": [{
+                "id": "antoine-kasongo",
+                "name": "Antoine Kasongo",
+                "aliases": ["Antoine"],
+                "role": "protagoniste",
+            }],
+            "locations": [],
+            "props": [],
+        })
+        chunks = [{
+            "text": "Antoine Kasongo : Je vais ouvrir cet atelier et terminer enfin le travail que mon grand-pere avait commence avant son depart.",
+            "dialogue": "Antoine : Je vais ouvrir cet atelier.",
+            "character_ids": ["antoine-kasongo"],
+        }]
+        errors = _segmentation_errors(chunks, form="conversation", project=self.project)
+        self.assertEqual(errors, [])
+        self.assertEqual(chunks[0]["speaker_id"], "antoine-kasongo")
+
