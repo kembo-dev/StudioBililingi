@@ -8,6 +8,7 @@ from apps.projects.services import (
     assist_concept,
     create_project,
     lock_bible,
+    persist_narrative_contract,
     review_beat,
     run_bible,
     run_segment,
@@ -42,6 +43,19 @@ class ProjectViewSet(viewsets.ModelViewSet):
             message = str(exc)
             code = status.HTTP_429_TOO_MANY_REQUESTS if "429" in message and "RESOURCE_EXHAUSTED" in message else status.HTTP_400_BAD_REQUEST
             return Response({"detail": message, "retryable": code == status.HTTP_429_TOO_MANY_REQUESTS}, status=code)
+        if bool(request.data.get("persist")):
+            project_id = request.data.get("project_id")
+            if not project_id:
+                return Response({"detail": "project_id est requis pour persister le contrat"}, status=status.HTTP_400_BAD_REQUEST)
+            project = self.get_queryset().filter(pk=project_id).first()
+            if project is None:
+                return Response({"detail": "Projet introuvable"}, status=status.HTTP_404_NOT_FOUND)
+            persist_narrative_contract(
+                project,
+                events=result["events"],
+                story_type=result["story_type"],
+                recommended_episode_count=result["recommended_episode_count"],
+            )
         return Response(result)
 
     def create(self, request):
