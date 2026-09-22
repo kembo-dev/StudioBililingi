@@ -904,8 +904,42 @@ def _segmentation_errors(chunks: list, *, form: str, project: Project) -> list[s
     return errors
 
 
+def _semantic_tokens(value: str) -> set[str]:
+    stop = {
+        "alors", "avec", "avoir", "cette", "comme", "dans", "elle", "elles", "entre", "etre",
+        "faire", "leur", "leurs", "mais", "nous", "pour", "plus", "quand", "sans", "sont",
+        "tout", "tous", "toute", "toutes", "une", "des", "les", "qui", "que", "sur", "son",
+        "ses", "aux", "par", "pas", "est", "et", "du", "de", "la", "le", "un", "au",
+    }
+    normalized = re.sub(r"[^a-z0-9àâäçéèêëîïôöùûüÿœ]+", " ", str(value or "").lower())
+    return {token for token in normalized.split() if len(token) >= 3 and token not in stop}
+
+
+def _event_redundancy_errors(chunks: list[dict]) -> list[str]:
+    """Catch near-duplicate beats inside one event without forbidding visual coverage."""
+    errors = []
+    by_event: dict[str, list[tuple[int, set[str], str]]] = {}
+    for index, row in enumerate(chunks, start=1):
+        event_id = str(row.get("event_id") or "").strip()
+        text = str(row.get("text") or "").strip()
+        if not event_id or not text:
+            continue
+        tokens = _semantic_tokens(text)
+        for previous_index, previous_tokens, previous_text in by_event.get(event_id, []):
+            union = tokens | previous_tokens
+            similarity = (len(tokens & previous_tokens) / len(union)) if union else 0.0
+            if similarity >= 0.72:
+                errors.append(
+                    f"{event_id}: beats {previous_index} et {index} semblent répéter la même information "
+                    f"(similarité {similarity:.0%})"
+                )
+        by_event.setdefault(event_id, []).append((index, tokens, text))
+    return errors
+
+
 def _validate_segmented_beats(chunks: list, *, form: str, project: Project) -> None:
     errors = _segmentation_errors(chunks, form=form, project=project)
+    errors.extend(_event_redundancy_errors(chunks))
     if errors:
         preview = "; ".join(errors[:8])
         raise ValueError(f"Segmentation refusée après correction automatique: {preview}.")
@@ -1014,9 +1048,29 @@ def review_beat(beat: Beat, decision: str, comment: str = "", take_id: int | Non
             take.save(update_fields=["status"])
         beat.status = Beat.Status.REJECTED
         beat.save(update_fields=["status"])
+    elif decision == "approve":
+        beat.status = Beat.Status.APPROVED_TEXT
+        beat.save(update_fields=["status"])
     else:
         beat.status = Beat.Status.DRAFT
         beat.save(update_fields=["status"])
+
+    if beat.narrative_event_id:
+        latest_script = beat.episode.scripts.order_by("-version").first()
+        event_beats = Beat.objects.filter(
+            script=latest_script,
+            narrative_event_id=beat.narrative_event_id,
+        )
+        if event_beats.exists() and not event_beats.exclude(
+            status__in=[Beat.Status.APPROVED_TEXT, Beat.Status.LOCKED]
+        ).exists():
+            NarrativeEvent.objects.filter(pk=beat.narrative_event_id).update(
+                status=NarrativeEvent.Status.CONSUMED
+            )
+        elif decision in {"reject", "revise"}:
+            NarrativeEvent.objects.filter(pk=beat.narrative_event_id).update(
+                status=NarrativeEvent.Status.SCRIPTED
+            )
 
     Review.objects.create(
         beat=beat,
