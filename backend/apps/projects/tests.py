@@ -1,6 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch, PropertyMock
+from unittest.mock import patch
 
 from django.test import TestCase
 
@@ -12,7 +12,7 @@ from apps.projects.character_resolver import CharacterResolver
 from apps.projects.beat_normalizer import normalize_beats
 from apps.projects.continuity import build_continuity_context, continuity_prompt, validate_render_readiness
 from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
-from apps.story.models import Beat, BeatTake, Episode, Script
+from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 from apps.bible.models import Character, Location, Prop
 
 
