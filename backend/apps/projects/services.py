@@ -130,7 +130,7 @@ def narrative_contract_payload(project: Project) -> dict:
     }
 
 
-def create_project(*, title: str, concept: str, genre: str = "", tone: str = "", ending_intent: str = "", delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
+def create_project(*, title: str, concept: str, genre: str = "", subgenre: str = "", setting: str = "", tone: str = "", ending_intent: str = "", episode_count_target: int | None = None, episode_duration_seconds: int = 60, delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
     org = _ensure_org(organization_name)
     base = slugify(title) or "projet"
     slug = base
@@ -140,7 +140,7 @@ def create_project(*, title: str, concept: str, genre: str = "", tone: str = "",
         n += 1
     project = Project.objects.create(
         organization=org, title=title, slug=slug, concept=concept,
-        genre=genre, tone=tone, ending_intent=ending_intent, delivery=delivery, visual_style=visual_style, status=Project.Status.ACTIVE,
+        genre=genre, subgenre=subgenre, setting=setting, tone=tone, ending_intent=ending_intent, episode_count_target=episode_count_target, episode_duration_seconds=episode_duration_seconds, delivery=delivery, visual_style=visual_style, status=Project.Status.ACTIVE,
     )
     Season.objects.create(project=project, number=1, title="Saison 1", premise=concept[:400])
     return project
@@ -500,8 +500,19 @@ def run_showrunner(project: Project) -> dict:
     try:
         from agents.roles.showrunner import Showrunner
         contract = narrative_contract_payload(project)
+        project_constraints = {
+            "genre": project.genre,
+            "subgenre": project.subgenre,
+            "setting": project.setting,
+            "episode_count_target": project.episode_count_target,
+            "episode_duration_seconds": project.episode_duration_seconds,
+            "delivery": project.delivery,
+            "visual_style": project.visual_style,
+        }
         raw = Showrunner().plan(
-            project.concept + ("\n\nNARRATIVE CONTRACT VERROUILLE:\n" + str(contract) if contract else ""),
+            project.concept
+            + "\n\nCONTRAINTES PROJET VERROUILLEES:\n" + str(project_constraints)
+            + ("\n\nNARRATIVE CONTRACT VERROUILLE:\n" + str(contract) if contract else ""),
             delivery=project.delivery,
         )
     except Exception as exc:
