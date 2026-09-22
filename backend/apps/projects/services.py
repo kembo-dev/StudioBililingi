@@ -21,6 +21,45 @@ def _ensure_org(name: str) -> Organization:
     return org
 
 
+def assist_concept(*, idea: str, delivery: str = "storytell") -> dict:
+    idea = str(idea or "").strip()
+    if not idea:
+        raise ValueError("Décris d'abord ton idée de départ")
+    from agents.backends import get_text
+
+    raw = get_text().generate_json(
+        system=(
+            "Tu es l'assistant de conception narrative de StudioBililingi. Transforme une idée utilisateur en concept "
+            "clair et fidèle SANS gonfler artificiellement l'histoire. Réponds en JSON avec exactement: "
+            "title, concept, genre, tone, story_type, recommended_episode_count, events, ending_intent. "
+            "events est une liste chronologique de faits/actions concrets présents ou directement impliqués par l'idée. "
+            "recommended_episode_count est le nombre NATUREL d'épisodes: une idée courte, linéaire, avec un seul trajet "
+            "ou objectif doit généralement rester à 1 épisode. N'ajoute ni antagoniste, twist, catastrophe, mystère, "
+            "romance ou enjeu majeur absent de l'idée. Tu peux enrichir les détails sensoriels et l'intention, mais pas "
+            "changer la prémisse. Le concept final doit être exploitable par un scénariste et rester concis. "
+            f"Le mode de livraison prévu est {delivery}; il influence la forme, jamais l'intrigue. Français naturel."
+        ),
+        user=idea,
+    )
+    if not isinstance(raw, dict):
+        raise RuntimeError("L'assistant concept n'a pas retourné une réponse structurée")
+    events = [str(item).strip() for item in (raw.get("events") or []) if str(item).strip()]
+    try:
+        count = max(1, min(50, int(raw.get("recommended_episode_count") or 1)))
+    except (TypeError, ValueError):
+        count = 1
+    return {
+        "title": str(raw.get("title") or "").strip(),
+        "concept": str(raw.get("concept") or idea).strip(),
+        "genre": str(raw.get("genre") or "").strip(),
+        "tone": str(raw.get("tone") or "").strip(),
+        "story_type": str(raw.get("story_type") or "").strip(),
+        "recommended_episode_count": count,
+        "events": events,
+        "ending_intent": str(raw.get("ending_intent") or "").strip(),
+    }
+
+
 def create_project(*, title: str, concept: str, genre: str = "", tone: str = "", ending_intent: str = "", delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
     org = _ensure_org(organization_name)
     base = slugify(title) or "projet"
