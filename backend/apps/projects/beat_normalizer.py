@@ -43,7 +43,10 @@ def split_text(text: str, max_words: int = MAX_WORDS) -> list[str]:
 
     sentences = _sentences(text)
     if len(sentences) <= 1:
-        return _hard_split(text, max_words=max_words)
+        # A single sentence must stay intact. Cutting it every N words creates
+        # broken dialogue across clips; semantic validation/repair can ask the
+        # segmenter to rewrite it into renderable sentences instead.
+        return [text.strip()]
 
     chunks: list[str] = []
     current: list[str] = []
@@ -52,7 +55,9 @@ def split_text(text: str, max_words: int = MAX_WORDS) -> list[str]:
             if current:
                 chunks.append(" ".join(current).strip())
                 current = []
-            chunks.extend(_hard_split(sentence, max_words=max_words))
+            # Preserve the complete sentence for the repair pass rather than
+            # manufacturing two syntactically broken beats.
+            chunks.append(sentence)
             continue
         candidate = " ".join(current + [sentence]).strip()
         if current and len(words(candidate)) > max_words:
