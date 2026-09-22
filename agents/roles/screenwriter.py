@@ -18,6 +18,7 @@ class Screenwriter:
         form: str = "storytell",
         continuity: list[dict] | None = None,
         narrative_contract: dict | None = None,
+        project_constraints: dict | None = None,
     ) -> dict:
         shapes = {
             "conversation": (
@@ -47,6 +48,7 @@ class Screenwriter:
                 "Réponds en JSON avec exactement les clés fountain et scenes. fountain contient le scénario complet. "
                 "scenes est une liste d'objets avec index, heading, summary, location_id, time_of_day et character_ids. "
                 f"{shape} Respecte strictement la bible, le ton, les noms, lieux et objets établis. "
+                "PROJECT CONTRACT: les contraintes projet sont canoniques. Respecte genre, sous-genre et cadre géographique/culturel sans déplacer l'histoire. Respecte la durée cible de l'épisode: calibre la quantité d'action et de narration pour cette durée sans répétition, remplissage moral ou nouvelle sous-intrigue. "
                 "N'introduis pas spontanément un nouveau lieu majeur, passage secret, tunnel, pièce cachée, organisation, "
                 "réseau, mouvement, artefact central ou nouvel enjeu politique qui n'est ni dans le CONCEPT ni dans la BIBLE. "
                 "Si l'épisode exige un nouvel élément visuel mineur, décris-le explicitement dans scenes mais ne transforme "
@@ -60,6 +62,7 @@ class Screenwriter:
             user=(
                 f"MODE DE LIVRAISON: {form}\n\n"
                 f"CONCEPT:\n{concept}\n\n"
+                f"CONTRAINTES PROJET VERROUILLEES:\n{project_constraints or {}}\n\n"
                 f"BIBLE:\n{bible}\n\n"
                 f"NARRATIVE CONTRACT VERROUILLE:\n{narrative_contract or {}}\n\n"
                 f"CONTINUITE CANONIQUE DES EPISODES PRECEDENTS:\n{continuity or []}\n\n"
