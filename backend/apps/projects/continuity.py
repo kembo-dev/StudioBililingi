@@ -90,8 +90,14 @@ def build_continuity_context(beat: Beat) -> dict:
 
 def continuity_prompt(beat: Beat, context: dict) -> str:
     """Turn canonical continuity into stable video instructions."""
+    from agents.roles.art_director import visual_style_prompt
+
+    project = beat.episode.season.project
     lines = [
         beat.video_prompt or beat.text,
+        "",
+        f"VISUAL STYLE LOCK [{project.visual_style}]: {visual_style_prompt(project.visual_style)}",
+        "Never drift to another rendering medium or visual style between shots.",
         "",
         "CONTINUITY LOCK - preserve exactly across shots:",
     ]
