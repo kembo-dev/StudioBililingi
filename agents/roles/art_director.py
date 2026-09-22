@@ -28,7 +28,7 @@ class ArtDirector:
     def __init__(self):
         self.image = get_image()
 
-    def character_ref(self, *, name: str, look: str, role: str, project_key: str | None = None, visual_style: str = "realistic") -> str:
+    def character_ref(self, *, name: str, look: str, role: str, project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
         return self.image.generate(
             f"VISUAL STYLE LOCK: {visual_style_prompt(visual_style)} "
             "Create ONE professional cinematic CHARACTER REFERENCE SHEET for production continuity in that exact visual style. "
@@ -47,20 +47,23 @@ class ArtDirector:
             "This image will be used as an identity reference for later video generation, so prioritize identity "
             "consistency and readable angles over artistic experimentation. "
             "Do not invent logos or watermarks. Avoid long generated prose; if labels are rendered, keep them minimal. "
-            f"CHARACTER NAME: {name}. ROLE: {role}. CANONICAL LOOK: {look}.",
+            f"CHARACTER NAME: {name}. ROLE: {role}. CANONICAL LOOK: {look}. "
+            f"USER REFINEMENT: {custom_prompt.strip() if custom_prompt.strip() else 'None. Follow the canonical look exactly.'}",
             project_key=project_key,
         )
 
-    def location_ref(self, *, name: str, look: str, time_of_day: str, project_key: str | None = None, visual_style: str = "realistic") -> str:
+    def location_ref(self, *, name: str, look: str, time_of_day: str, project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
         return self.image.generate(
             f"VISUAL STYLE LOCK: {visual_style_prompt(visual_style)} Cinematic establishing plate in that exact style, empty of named characters, no text. "
-            f"Place: {name}. Time: {time_of_day or 'unspecified'}. Look: {look}.",
+            f"Place: {name}. Time: {time_of_day or 'unspecified'}. Look: {look}. "
+            f"USER REFINEMENT: {custom_prompt.strip() if custom_prompt.strip() else 'None. Follow the canonical look exactly.'}",
             project_key=project_key,
         )
 
-    def prop_ref(self, *, name: str, look: str, project_key: str | None = None, visual_style: str = "realistic") -> str:
+    def prop_ref(self, *, name: str, look: str, project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
         return self.image.generate(
             f"VISUAL STYLE LOCK: {visual_style_prompt(visual_style)} Product-style hero shot of a story prop in that exact style, plain background, no text. "
-            f"Object: {name}. Look: {look}.",
+            f"Object: {name}. Look: {look}. "
+            f"USER REFINEMENT: {custom_prompt.strip() if custom_prompt.strip() else 'None. Follow the canonical look exactly.'}",
             project_key=project_key,
         )
