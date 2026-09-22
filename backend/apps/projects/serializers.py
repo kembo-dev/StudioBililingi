@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
-from apps.projects.models import Project, Season
+from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 
 
@@ -104,14 +104,29 @@ class SeasonSerializer(serializers.ModelSerializer):
         fields = ("id", "number", "title", "premise", "episodes")
 
 
+class NarrativeEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NarrativeEvent
+        fields = ("key", "position", "description", "episode_number", "status")
+
+
+class NarrativeContractSerializer(serializers.ModelSerializer):
+    events = NarrativeEventSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = NarrativeContract
+        fields = ("point_of_view", "narrator", "tense", "story_type", "recommended_episode_count", "rules", "locked", "events")
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     seasons = SeasonSerializer(many=True, read_only=True)
     bibles = WorldBibleSerializer(many=True, read_only=True)
     refs = serializers.SerializerMethodField()
+    narrative_contract = NarrativeContractSerializer(read_only=True)
 
     class Meta:
         model = Project
-        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "delivery", "visual_style", "status", "created_at", "seasons", "bibles", "refs")
+        fields = ("id", "title", "slug", "concept", "genre", "tone", "ending_intent", "aspect_ratio", "delivery", "visual_style", "status", "created_at", "narrative_contract", "seasons", "bibles", "refs")
         read_only_fields = ("slug", "status", "created_at")
 
     def get_refs(self, obj):
