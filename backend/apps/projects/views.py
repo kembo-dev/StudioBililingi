@@ -115,6 +115,32 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_queryset().get(pk=project.pk)
         return Response(ProjectSerializer(project).data)
 
+    @action(detail=True, methods=["post"], url_path="regenerate-reference")
+    def regenerate_reference_action(self, request, pk=None):
+        from apps.projects.visuals import regenerate_visual_ref
+
+        project = self.get_object()
+        entity_type = str(request.data.get("entity_type") or "").strip()
+        entity_key = str(request.data.get("entity_key") or "").strip()
+        if not entity_type or not entity_key:
+            return Response({"detail": "entity_type et entity_key sont requis"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            asset = regenerate_visual_ref(project, entity_type, entity_key)
+        except Exception as exc:
+            message = str(exc)
+            if "429" in message and ("RESOURCE_EXHAUSTED" in message or "Resource exhausted" in message):
+                return Response(
+                    {"detail": "Quota/capacité Vertex AI temporairement épuisé. L'ancienne référence est conservée.", "retryable": True},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            if isinstance(exc, (ValueError, RuntimeError)):
+                return Response({"detail": message}, status=status.HTTP_400_BAD_REQUEST)
+            raise
+        return Response({
+            "id": asset.id, "role": asset.role, "uri": asset.uri,
+            "provider": asset.provider, "meta": asset.meta,
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"], url_path="regenerate-character-ref")
     def regenerate_character_ref_action(self, request, pk=None):
         from apps.projects.visuals import regenerate_character_ref
