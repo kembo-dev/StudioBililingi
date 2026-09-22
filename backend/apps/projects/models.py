@@ -9,6 +9,18 @@ class Project(models.Model):
         ACTIVE = "active"
         ARCHIVED = "archived"
 
+    class VisualStyle(models.TextChoices):
+        REALISTIC = "realistic", "Réaliste cinématographique"
+        CARTOON = "cartoon", "Cartoon"
+        MANGA = "manga", "Manga / Anime"
+        THREE_D = "3d_animation", "Animation 3D"
+        COMIC = "comic", "Bande dessinée / Comic"
+        WATERCOLOR = "watercolor", "Aquarelle"
+        CLAY = "claymation", "Claymation"
+        PIXEL = "pixel_art", "Pixel art"
+        NOIR = "film_noir", "Film noir"
+        FANTASY = "fantasy", "Fantasy stylisée"
+
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name="projects"
     )
@@ -19,6 +31,12 @@ class Project(models.Model):
     tone = models.CharField(max_length=80, blank=True)
     ending_intent = models.TextField(blank=True)
     aspect_ratio = models.CharField(max_length=16, default="16:9")
+    visual_style = models.CharField(
+        max_length=32,
+        choices=VisualStyle.choices,
+        default=VisualStyle.REALISTIC,
+        help_text="Direction visuelle canonique appliquée aux références et aux rendus.",
+    )
     delivery = models.CharField(
         max_length=24,
         default="storytell",
