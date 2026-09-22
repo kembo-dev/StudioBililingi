@@ -54,7 +54,7 @@ class BeatSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Beat
-        fields = ("id", "scene_id", "script_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes")
+        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes")
 
     def get_clip_uri(self, obj):
         locked = obj.takes.filter(status=BeatTake.Status.LOCKED).order_by("-number").first()
