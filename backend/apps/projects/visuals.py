@@ -42,24 +42,24 @@ def generate_refs(project: Project) -> list:
             continue
         save(
             Asset.Role.CHARACTER_REF,
-            artist.character_ref(name=char.name, look=char.look, role=char.role, project_key=project_key),
-            {"key": char.key, "name": char.name, "entity": "character"},
+            artist.character_ref(name=char.name, look=char.look, role=char.role, project_key=project_key, visual_style=project.visual_style),
+            {"key": char.key, "name": char.name, "entity": "character", "visual_style": project.visual_style},
         )
     for loc in project.locations.all():
         if existing(Asset.Role.LOCATION_REF, loc.key):
             continue
         save(
             Asset.Role.LOCATION_REF,
-            artist.location_ref(name=loc.name, look=loc.look, time_of_day=loc.time_of_day, project_key=project_key),
-            {"key": loc.key, "name": loc.name, "entity": "location"},
+            artist.location_ref(name=loc.name, look=loc.look, time_of_day=loc.time_of_day, project_key=project_key, visual_style=project.visual_style),
+            {"key": loc.key, "name": loc.name, "entity": "location", "visual_style": project.visual_style},
         )
     for prop in project.props.all():
         if existing(Asset.Role.PROP_REF, prop.key):
             continue
         save(
             Asset.Role.PROP_REF,
-            artist.prop_ref(name=prop.name, look=prop.look, project_key=project_key),
-            {"key": prop.key, "name": prop.name, "entity": "prop"},
+            artist.prop_ref(name=prop.name, look=prop.look, project_key=project_key, visual_style=project.visual_style),
+            {"key": prop.key, "name": prop.name, "entity": "prop", "visual_style": project.visual_style},
         )
     return created
 
@@ -83,6 +83,7 @@ def regenerate_character_ref(project: Project, character_key: str):
         look=character.look,
         role=character.role,
         project_key=project_key,
+        visual_style=project.visual_style,
     )
     old_assets = list(
         Asset.objects.filter(
