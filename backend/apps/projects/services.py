@@ -566,6 +566,33 @@ def _ensure_script_speakers(project: Project, bible: WorldBible | None, script_t
                 },
             )
 
+def cleanup_generated_script_characters(project: Project) -> int:
+    """Remove bogus characters created by the old permissive speaker parser."""
+    bogus_tokens = {
+        identity_token("Title"), identity_token("Author"), identity_token("Episode"),
+        identity_token("C'est la première phase, Claire"),
+    }
+    qs = project.characters.filter(role="interlocuteur")
+    doomed = [
+        character.id for character in qs
+        if identity_token(character.name) in bogus_tokens
+    ]
+    if not doomed:
+        return 0
+    count, _ = project.characters.filter(id__in=doomed).delete()
+
+    bible = project.bibles.first()
+    if bible:
+        payload = dict(bible.payload or {})
+        payload["characters"] = [
+            item for item in (payload.get("characters") or [])
+            if identity_token(item.get("name")) not in bogus_tokens
+        ]
+        bible.payload = payload
+        bible.save(update_fields=["payload"])
+    return count
+
+
 def _beat_chunks(raw, fallback_text: str) -> list:
     items = raw if isinstance(raw, list) else (raw.get("beats") if isinstance(raw, dict) else None)
     chunks = []
