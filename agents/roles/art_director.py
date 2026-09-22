@@ -9,21 +9,24 @@ class ArtDirector:
     def __init__(self):
         self.image = get_image()
 
-    def character_ref(self, *, name: str, look: str, role: str) -> str:
+    def character_ref(self, *, name: str, look: str, role: str, project_key: str | None = None) -> str:
         return self.image.generate(
             "Photoreal cinematic character reference, single person, consistent wardrobe, "
             "neutral studio lighting, no text. "
-            f"Name: {name}. Role: {role}. Look: {look}."
+            f"Name: {name}. Role: {role}. Look: {look}.",
+            project_key=project_key,
         )
 
-    def location_ref(self, *, name: str, look: str, time_of_day: str) -> str:
+    def location_ref(self, *, name: str, look: str, time_of_day: str, project_key: str | None = None) -> str:
         return self.image.generate(
             "Cinematic establishing plate, empty of named characters, no text. "
-            f"Place: {name}. Time: {time_of_day or 'unspecified'}. Look: {look}."
+            f"Place: {name}. Time: {time_of_day or 'unspecified'}. Look: {look}.",
+            project_key=project_key,
         )
 
-    def prop_ref(self, *, name: str, look: str) -> str:
+    def prop_ref(self, *, name: str, look: str, project_key: str | None = None) -> str:
         return self.image.generate(
             "Product-style hero shot of a story prop, plain background, no text. "
-            f"Object: {name}. Look: {look}."
+            f"Object: {name}. Look: {look}.",
+            project_key=project_key,
         )
