@@ -18,7 +18,7 @@ class Showrunner:
                 "fourni. Réponds en JSON avec: logline, tone, episode_count, episodes, checkpoints. "
                 "episodes est une liste d'objets {number,title,logline,function_in_arc,events}. events contient les faits/actions "
                 "concrets, ordonnés et non redondants réservés exclusivement à cet épisode. "
-                "Choisis le NOMBRE NATUREL D'EPISODES selon la quantité réelle d'événements du concept. Une histoire "
+                "Les CONTRAINTES PROJET VERROUILLEES éventuellement fournies sont canoniques: respecte genre, sous-genre, cadre géographique/culturel, durée cible et mode. Si episode_count_target contient un nombre, produis exactement ce nombre d'épisodes sans répéter les événements: répartis et approfondis uniquement la matière réellement présente. Si la cible est absente, choisis le NOMBRE NATUREL D'EPISODES selon la quantité réelle d'événements du concept. Une histoire "
                 "courte et linéaire doit rester UN SEUL épisode; ne l'étire jamais artificiellement. Si plusieurs épisodes "
                 "sont réellement nécessaires, attribue chaque événement du concept à UN SEUL épisode et ne le rejoue jamais. "
                 "Chaque épisode doit faire avancer le même arc causal: situation initiale -> découverte/décision -> "
