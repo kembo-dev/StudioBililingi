@@ -30,7 +30,7 @@ type Episode = {
   scenes: Scene[];
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
-type Location = { id: number; name: string; look: string };
+type Location = { id: number; key: string; name: string; look: string };\ntype Prop = { id: number; key: string; name: string; look: string; story_function?: string };
 type Ref = { id: number; role: string; uri: string; provider?: string; meta?: { name?: string; key?: string } };
 type Project = {
   id: number;
@@ -39,7 +39,7 @@ type Project = {
   delivery: string;
   visual_style: string;
   refs?: Ref[];
-  bibles: { id: number; version: number; locked: boolean; characters: Character[]; locations: Location[] }[];
+  bibles: { id: number; version: number; locked: boolean; characters: Character[]; locations: Location[]; props: Prop[] }[];
   seasons: { id: number; episodes: Episode[] }[];
 };
 
@@ -49,7 +49,7 @@ export default function ProjectPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [reframe, setReframe] = useState<Record<number, string>>({});
-  const [previewRef, setPreviewRef] = useState<Ref | null>(null);
+  const [previewRef, setPreviewRef] = useState<Ref | null>(null);\n  const [showAddRef, setShowAddRef] = useState(false);\n  const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
@@ -114,10 +114,34 @@ export default function ProjectPage() {
               <button onClick={() => run("lock", `/api/projects/${project.id}/lock-bible/`)} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a]">{busy === "lock" ? "\u2026" : "Verrouiller la bible"}</button>
             ) : null}
             {bible?.locked ? (
-              <button onClick={() => run("refs", `/api/projects/${project.id}/generate-refs/`)} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a]">{busy === "refs" ? "\u2026" : "Générer les refs"}</button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowAddRef((v) => !v)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs">{showAddRef ? "Annuler" : "+ Ajouter une ref"}</button>
+                <button onClick={() => run("refs", `/api/projects/${project.id}/generate-refs/`)} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a]">{busy === "refs" ? "\u2026" : "Générer les refs"}</button>
+              </div>
             ) : null}
           </div>
         </div>
+        {showAddRef && bible?.locked ? (
+          <form className="space-y-3 rounded-xl border border-[#e8c36a]/40 bg-[#14161c] p-4" onSubmit={async (e) => {
+            e.preventDefault(); setBusy("add-ref"); setError("");
+            try {
+              await api(`/api/projects/${project.id}/add-reference/`, { method: "POST", body: JSON.stringify(newRef) });
+              setNewRef({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
+              setShowAddRef(false); await load();
+            } catch (err) { setError(String(err)); } finally { setBusy(""); }
+          }}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-[#9aa3b2]">Type<select value={newRef.entity_type} onChange={(e) => setNewRef((v) => ({...v, entity_type:e.target.value}))} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white"><option value="character">Personnage</option><option value="location">Lieu</option><option value="prop">Objet / accessoire</option></select></label>
+              <label className="text-xs text-[#9aa3b2]">Nom<input required value={newRef.name} onChange={(e) => setNewRef((v) => ({...v,name:e.target.value}))} placeholder="Ex. Bouilloire, tasse de thé" className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white" /></label>
+            </div>
+            <label className="block text-xs text-[#9aa3b2]">Description visuelle canonique<textarea required rows={3} value={newRef.look} onChange={(e) => setNewRef((v) => ({...v,look:e.target.value}))} placeholder="Apparence exacte à conserver dans tous les plans." className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white" /></label>
+            {newRef.entity_type === "character" ? <label className="block text-xs text-[#9aa3b2]">Rôle<input value={newRef.role} onChange={(e) => setNewRef((v) => ({...v,role:e.target.value}))} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white" /></label> : null}
+            {newRef.entity_type === "location" ? <label className="block text-xs text-[#9aa3b2]">Moment / ambiance<input value={newRef.time_of_day} onChange={(e) => setNewRef((v) => ({...v,time_of_day:e.target.value}))} placeholder="Ex. 02h00, nuit" className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white" /></label> : null}
+            {newRef.entity_type === "prop" ? <label className="block text-xs text-[#9aa3b2]">Fonction dans l'histoire<input value={newRef.story_function} onChange={(e) => setNewRef((v) => ({...v,story_function:e.target.value}))} placeholder="Ex. Présente dans plusieurs épisodes." className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white" /></label> : null}
+            <button disabled={busy === "add-ref"} className="rounded-lg bg-[#e8c36a] px-4 py-2 text-sm font-medium text-[#0b0c10] disabled:opacity-50">{busy === "add-ref" ? "Ajout…" : "Ajouter à la Bible"}</button>
+            <p className="text-xs text-[#9aa3b2]">L'élément devient canonique. « Générer les refs » créera ensuite uniquement son image manquante dans le style du projet.</p>
+          </form>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           {(bible?.characters ?? []).map((c) => (
             <article key={c.id} className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
@@ -146,6 +170,13 @@ export default function ProjectPage() {
             <article key={l.id} className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
               <p className="font-medium">{l.name}</p>
               <p className="mt-2 text-sm text-[#9aa3b2]">{l.look}</p>
+            </article>
+          ))}
+          {(bible?.props ?? []).map((p) => (
+            <article key={`prop-${p.id}`} className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-4">
+              <p className="font-medium">{p.name}</p>
+              <p className="text-xs text-[#e8c36a]">Objet / accessoire</p>
+              <p className="mt-2 text-sm text-[#9aa3b2]">{p.look}</p>
             </article>
           ))}
         </div>
