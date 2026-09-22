@@ -206,9 +206,25 @@ export default function ProjectPage() {
                   />
                 </button>
                 <div className="p-3">
-                  <p className="font-medium">{ref.meta?.name ?? ref.meta?.key ?? "Référence"}</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[#e8c36a]">{ref.role.replaceAll("_", " ")}</p>
-                  <p className="mt-1 truncate text-xs text-[#9aa3b2]">{ref.provider || "provider inconnu"}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{ref.meta?.name ?? ref.meta?.key ?? "Référence"}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[#e8c36a]">{ref.role.replaceAll("_", " ")}</p>
+                      <p className="mt-1 truncate text-xs text-[#9aa3b2]">{ref.provider || "provider inconnu"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy === `delete-ref-${ref.id}`}
+                      onClick={async () => {
+                        const name = ref.meta?.name ?? ref.meta?.key ?? "cette référence";
+                        if (!window.confirm(`Supprimer l'image de référence « ${name} » ? L'élément restera dans la Bible et pourra être régénéré.`)) return;
+                        await run(`delete-ref-${ref.id}`, `/api/projects/${project.id}/delete-reference/`, { asset_id: ref.id });
+                      }}
+                      className="shrink-0 text-xs text-red-400 disabled:opacity-50"
+                    >
+                      {busy === `delete-ref-${ref.id}` ? "…" : "Supprimer"}
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}
