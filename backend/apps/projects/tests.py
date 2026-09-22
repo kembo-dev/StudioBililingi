@@ -526,6 +526,42 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(payload["visual_style"], "realistic")
 
 
+    def test_scene_plan_rejects_unknown_location_and_missing_event(self):
+        from apps.projects.services import _scene_plan_errors
+
+        persist_bible(self.project, {
+            "characters": [{"id": "leo", "name": "Leo"}],
+            "locations": [{"id": "maison", "name": "Maison", "look": "interieur"}],
+            "props": [],
+        })
+        errors = _scene_plan_errors(
+            [{"index": 1, "location_id": "route", "time_of_day": "matin", "character_ids": ["leo"], "prop_ids": [], "event_ids": ["EV01"], "target_seconds": 60}],
+            project=self.project,
+            episode=self.episode,
+            expected_events={"EV01", "EV02"},
+        )
+        self.assertTrue(any("location_id canonique invalide" in error for error in errors))
+        self.assertTrue(any("EV02" in error for error in errors))
+
+    def test_beat_scene_plan_rejects_scene_drift(self):
+        from apps.projects.services import _beat_scene_plan_errors
+
+        errors = _beat_scene_plan_errors(
+            [{"scene_index": 1, "location_id": "ecole", "time_of_day": "matin", "event_id": "EV01"}],
+            [{"index": 1, "location_id": "maison", "time_of_day": "matin", "event_ids": ["EV01"]}],
+        )
+        self.assertTrue(any("location_id" in error for error in errors))
+
+    def test_beat_scene_plan_accepts_locked_scene_contract(self):
+        from apps.projects.services import _beat_scene_plan_errors
+
+        errors = _beat_scene_plan_errors(
+            [{"scene_index": 2, "location_id": "route", "time_of_day": "matin", "event_id": "EV04"}],
+            [{"index": 2, "location_id": "route", "time_of_day": "matin", "event_ids": ["EV04", "EV05"]}],
+        )
+        self.assertEqual(errors, [])
+
+
     def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
         before_scripts = Script.objects.filter(episode=self.episode).count()
         before_beats = Beat.objects.filter(episode=self.episode).count()
