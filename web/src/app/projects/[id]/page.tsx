@@ -20,6 +20,8 @@ type Beat = {
   ingredients?: { role?: string; name?: string; uri?: string }[];
   takes: BeatTake[];
 };
+type PlannedScene = { index: number; heading: string; summary: string; location_id: string; time_of_day: string; character_ids: string[]; prop_ids: string[]; event_ids: string[]; target_seconds: number };
+type ScenePlan = { id: number; version: number; payload: PlannedScene[]; locked: boolean; created_at: string };
 type Episode = {
   id: number;
   number: number;
@@ -29,6 +31,7 @@ type Episode = {
   latest_script?: string;
   beats: Beat[];
   scenes: Scene[];
+  scene_plans: ScenePlan[];
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; key: string; name: string; look: string };
@@ -341,9 +344,20 @@ export default function ProjectPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <button onClick={() => run(`scr-${ep.id}`, `/api/episodes/${ep.id}/write-script/`)} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a]">{busy === `scr-${ep.id}` ? "\u2026" : "Écrire le script"}</button>
-                <button onClick={() => run(`seg-${ep.id}`, `/api/episodes/${ep.id}/segment/`)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs">{busy === `seg-${ep.id}` ? "\u2026" : "Découper en beats"}</button>
+                <button onClick={() => run(`plan-${ep.id}`, `/api/episodes/${ep.id}/plan-scenes/`)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs">{busy === `plan-${ep.id}` ? "…" : ep.scene_plans?.length ? "Régénérer le Scene Plan" : "Générer le Scene Plan"}</button>
+                <button disabled={!ep.scene_plans?.some((plan) => plan.locked)} onClick={() => run(`seg-${ep.id}`, `/api/episodes/${ep.id}/segment/`)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs disabled:opacity-40">{busy === `seg-${ep.id}` ? "…" : "Découper en beats"}</button>
               </div>
             </div>
+            {ep.scene_plans?.length ? (() => {
+              const plan = ep.scene_plans[0];
+              return <div className="mt-4 rounded-xl border border-[#2a2e38] bg-[#0b0c10] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div><p className="text-sm font-medium">Scene Plan v{plan.version}</p><p className="text-xs text-[#9aa3b2]">{plan.locked ? "Verrouillé · utilisé pour les beats" : "À vérifier avant segmentation"}</p></div>
+                  {!plan.locked ? <button onClick={() => run(`lock-plan-${ep.id}`, `/api/episodes/${ep.id}/lock-scene-plan/`, { scene_plan_id: plan.id })} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a]">{busy === `lock-plan-${ep.id}` ? "…" : "Verrouiller"}</button> : <span className="text-xs text-green-400">✓ verrouillé</span>}
+                </div>
+                <div className="mt-3 space-y-2">{plan.payload.map((scene) => <div key={scene.index} className="rounded-lg border border-[#2a2e38] px-3 py-2 text-xs"><p className="font-medium">Scène {scene.index} · {scene.heading || scene.location_id} · {scene.target_seconds}s</p><p className="mt-1 text-[#9aa3b2]">{scene.summary}</p><p className="mt-1 text-[#e8c36a]">{scene.location_id} · {scene.time_of_day} · {(scene.event_ids || []).join(" ")}</p></div>)}</div>
+              </div>;
+            })() : ep.latest_script ? <p className="mt-3 text-xs text-[#9aa3b2]">Génère et verrouille le Scene Plan avant le découpage en beats.</p> : null}
             {ep.scenes?.length ? <div className="mt-3 flex flex-wrap gap-2">{ep.scenes.map((scene) => <span key={scene.id} className="rounded-full border border-[#2a2e38] px-2 py-1 text-xs text-[#9aa3b2]">Scène {scene.index} · {scene.heading || "Sans titre"}</span>)}</div> : null}
             {ep.beats.length ? (
               <ol className="mt-3 space-y-2">
