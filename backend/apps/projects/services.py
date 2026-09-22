@@ -311,8 +311,31 @@ def _episode_rows(raw: dict, concept: str) -> list[dict]:
     for i, row in enumerate(rows or [], start=1):
         if not isinstance(row, dict):
             continue
-        cleaned.append({"number": int(row.get("number") or i), "title": row.get("title") or f"Épisode {i}", "logline": row.get("logline") or concept[:180], "function_in_arc": row.get("function_in_arc") or ""})
+        cleaned.append({
+            "number": int(row.get("number") or i),
+            "title": row.get("title") or f"Épisode {i}",
+            "logline": row.get("logline") or concept[:180],
+            "function_in_arc": row.get("function_in_arc") or "",
+            "events": [str(event).strip() for event in (row.get("events") or []) if str(event).strip()],
+        })
     return cleaned or seed_season_plan(concept)
+
+
+def _validate_episode_plan(rows: list[dict]) -> list[str]:
+    errors = []
+    seen = {}
+    for row in rows:
+        for event in row.get("events") or []:
+            token = re.sub(r"[^a-z0-9]+", " ", event.lower()).strip()
+            if not token:
+                continue
+            if token in seen:
+                errors.append(
+                    f"Événement dupliqué entre E{seen[token]} et E{row['number']}: {event}"
+                )
+            else:
+                seen[token] = row["number"]
+    return errors
 
 
 def run_showrunner(project: Project) -> dict:
@@ -328,7 +351,12 @@ def run_showrunner(project: Project) -> dict:
     rows = _episode_rows(raw, project.concept)
     if raw.get("_error"):
         raise RuntimeError(f"Le showrunner n'a pas pu générer le plan de saison: {raw['_error']}")
+    plan_errors = _validate_episode_plan(rows)
+    if plan_errors:
+        raise RuntimeError("Plan de saison incohérent: " + "; ".join(plan_errors))
     episodes = persist_episodes(project, rows)
+    # Keep the structured event ledger in the successful planning job/result path
+    # by attaching it to the return contract; screenwriting receives it below.
     return {"agent": raw, "episodes": [e.id for e in episodes]}
 
 
