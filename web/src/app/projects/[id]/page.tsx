@@ -49,6 +49,7 @@ export default function ProjectPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [reframe, setReframe] = useState<Record<number, string>>({});
+  const [previewRef, setPreviewRef] = useState<Ref | null>(null);
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
@@ -158,11 +159,18 @@ export default function ProjectPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {project.refs.map((ref) => (
               <article key={ref.id} className="overflow-hidden rounded-xl border border-[#2a2e38] bg-[#14161c]">
-                <img
-                  src={mediaUrl(ref.uri)}
-                  alt={ref.meta?.name ?? ref.meta?.key ?? ref.role}
-                  className="aspect-video w-full bg-[#0b0c10] object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => setPreviewRef(ref)}
+                  className="block w-full cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-[#e8c36a]"
+                  aria-label={`Voir la référence ${ref.meta?.name ?? ref.meta?.key ?? ref.role}`}
+                >
+                  <img
+                    src={mediaUrl(ref.uri)}
+                    alt={ref.meta?.name ?? ref.meta?.key ?? ref.role}
+                    className="aspect-video w-full bg-[#0b0c10] object-cover"
+                  />
+                </button>
                 <div className="p-3">
                   <p className="font-medium">{ref.meta?.name ?? ref.meta?.key ?? "Référence"}</p>
                   <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[#e8c36a]">{ref.role.replaceAll("_", " ")}</p>
@@ -226,6 +234,45 @@ export default function ProjectPage() {
           </article>
         ))}
       </section>
+      {previewRef ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Aperçu de la référence visuelle"
+          onClick={() => setPreviewRef(null)}
+        >
+          <div
+            className="flex max-h-[92vh] max-w-6xl flex-col overflow-hidden rounded-xl border border-[#2a2e38] bg-[#0b0c10]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-[#2a2e38] px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate font-medium">
+                  {previewRef.meta?.name ?? previewRef.meta?.key ?? "Référence"}
+                </p>
+                <p className="text-xs uppercase tracking-[0.12em] text-[#e8c36a]">
+                  {previewRef.role.replaceAll("_", " ")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewRef(null)}
+                className="rounded-lg border border-[#2a2e38] px-3 py-2 text-sm"
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="overflow-auto p-3">
+              <img
+                src={mediaUrl(previewRef.uri)}
+                alt={previewRef.meta?.name ?? previewRef.meta?.key ?? previewRef.role}
+                className="mx-auto max-h-[78vh] max-w-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
