@@ -130,6 +130,18 @@ def narrative_contract_payload(project: Project) -> dict:
     }
 
 
+def project_constraints_payload(project: Project) -> dict:
+    return {
+        "genre": project.genre,
+        "subgenre": project.subgenre,
+        "setting": project.setting,
+        "episode_count_target": project.episode_count_target,
+        "episode_duration_seconds": project.episode_duration_seconds,
+        "delivery": project.delivery,
+        "visual_style": project.visual_style,
+    }
+
+
 def create_project(*, title: str, concept: str, genre: str = "", subgenre: str = "", setting: str = "", tone: str = "", ending_intent: str = "", episode_count_target: int | None = None, episode_duration_seconds: int = 60, delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
     org = _ensure_org(organization_name)
     base = slugify(title) or "projet"
@@ -500,15 +512,7 @@ def run_showrunner(project: Project) -> dict:
     try:
         from agents.roles.showrunner import Showrunner
         contract = narrative_contract_payload(project)
-        project_constraints = {
-            "genre": project.genre,
-            "subgenre": project.subgenre,
-            "setting": project.setting,
-            "episode_count_target": project.episode_count_target,
-            "episode_duration_seconds": project.episode_duration_seconds,
-            "delivery": project.delivery,
-            "visual_style": project.visual_style,
-        }
+        project_constraints = project_constraints_payload(project)
         raw = Showrunner().plan(
             project.concept
             + "\n\nCONTRAINTES PROJET VERROUILLEES:\n" + str(project_constraints)
@@ -570,7 +574,7 @@ def run_bible(project: Project) -> WorldBible:
     raw = None
     for attempt in range(2):
         try:
-            raw = agent.draft(project.concept, delivery=project.delivery)
+            raw = agent.draft(project.concept, delivery=project.delivery, project_constraints=project_constraints_payload(project))
         except Exception as exc:
             last_error = str(exc)
             if attempt == 0:
@@ -599,6 +603,7 @@ def run_bible(project: Project) -> WorldBible:
                 + "\n\nCONTRAINTES DE CORRECTION OBLIGATOIRES: "
                 + "; ".join(errors),
                 delivery=project.delivery,
+                project_constraints=project_constraints_payload(project),
             )
         except Exception as exc:
             raise RuntimeError(f"La correction automatique de la bible a échoué: {exc}") from exc
@@ -662,6 +667,7 @@ def write_script(episode: Episode) -> Script:
             form=project.delivery,
             continuity=_canonical_continuity(episode),
             narrative_contract=narrative_contract_payload(project),
+            project_constraints=project_constraints_payload(project),
         )
     except Exception as exc:
         raise RuntimeError(f"L'écriture du script a échoué: {exc}") from exc
@@ -678,6 +684,8 @@ def write_script(episode: Episode) -> Script:
                     episode={"number": episode.number, "title": episode.title, "logline": episode.logline},
                     form=project.delivery,
                     continuity=_canonical_continuity(episode),
+                    narrative_contract=narrative_contract_payload(project),
+                    project_constraints=project_constraints_payload(project),
                 )
             except Exception as exc:
                 raise RuntimeError(f"La correction du script conversation a échoué: {exc}") from exc
