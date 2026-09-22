@@ -8,7 +8,7 @@ from django.utils.text import slugify
 from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
-from apps.projects.models import Project, Season
+from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 from apps.projects.beat_normalizer import normalize_beats, speaker_label, _speaker_occurrences
 from apps.projects.character_resolver import CharacterResolver, identity_token, normalize_bible_payload
@@ -57,6 +57,76 @@ def assist_concept(*, idea: str, delivery: str = "storytell") -> dict:
         "recommended_episode_count": count,
         "events": events,
         "ending_intent": str(raw.get("ending_intent") or "").strip(),
+    }
+
+
+def persist_narrative_contract(
+    project: Project,
+    *,
+    events: list[str],
+    story_type: str = "",
+    recommended_episode_count: int = 1,
+    point_of_view: str | None = None,
+) -> NarrativeContract:
+    if point_of_view not in {choice for choice, _ in NarrativeContract.PointOfView.choices}:
+        point_of_view = (
+            NarrativeContract.PointOfView.DIALOGUE
+            if project.delivery in {"conversation", "rencontre"}
+            else NarrativeContract.PointOfView.THIRD_PERSON
+        )
+    contract, _ = NarrativeContract.objects.update_or_create(
+        project=project,
+        defaults={
+            "point_of_view": point_of_view,
+            "narrator": "external" if point_of_view == NarrativeContract.PointOfView.THIRD_PERSON else "none",
+            "tense": "present",
+            "story_type": str(story_type or "")[:40],
+            "recommended_episode_count": max(1, min(50, int(recommended_episode_count or 1))),
+            "rules": {
+                "no_repetition": True,
+                "no_moral_filler": True,
+                "one_new_story_information_per_beat": True,
+                "scene_changes_on_location_or_time": True,
+            },
+            "locked": True,
+        },
+    )
+    contract.events.all().delete()
+    NarrativeEvent.objects.bulk_create([
+        NarrativeEvent(
+            contract=contract,
+            key=f"EV{index:02d}",
+            position=index,
+            description=str(description).strip(),
+        )
+        for index, description in enumerate(events, start=1)
+        if str(description).strip()
+    ])
+    return contract
+
+
+def narrative_contract_payload(project: Project) -> dict:
+    try:
+        contract = project.narrative_contract
+    except NarrativeContract.DoesNotExist:
+        return {}
+    return {
+        "point_of_view": contract.point_of_view,
+        "narrator": contract.narrator,
+        "tense": contract.tense,
+        "story_type": contract.story_type,
+        "recommended_episode_count": contract.recommended_episode_count,
+        "rules": contract.rules,
+        "events": [
+            {
+                "key": event.key,
+                "position": event.position,
+                "description": event.description,
+                "episode_number": event.episode_number,
+                "status": event.status,
+            }
+            for event in contract.events.all()
+        ],
     }
 
 
