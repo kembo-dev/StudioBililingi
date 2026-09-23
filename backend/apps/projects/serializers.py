@@ -3,7 +3,7 @@ from rest_framework import serializers
 from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
-from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script
+from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script, Shot, ShotTake
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -46,15 +46,36 @@ class BeatTakeSerializer(serializers.ModelSerializer):
         fields = ("id", "number", "prompt", "negative_prompt", "backend", "uri", "status", "generation_meta", "created_at")
 
 
+class ShotTakeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShotTake
+        fields = ("id", "number", "prompt", "negative_prompt", "backend", "uri", "status", "generation_meta", "created_at")
+
+
+class ShotSerializer(serializers.ModelSerializer):
+    takes = ShotTakeSerializer(many=True, read_only=True)
+    clip_uri = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Shot
+        fields = ("id", "index", "text", "duration_seconds", "video_prompt", "negative_prompt", "camera", "continuity", "status", "clip_uri", "takes")
+
+    def get_clip_uri(self, obj):
+        locked = obj.takes.filter(status=ShotTake.Status.LOCKED).order_by("-number").first()
+        latest = locked or obj.takes.filter(uri__gt="").order_by("-number").first()
+        return latest.uri if latest else None
+
+
 class BeatSerializer(serializers.ModelSerializer):
     clip_uri = serializers.SerializerMethodField()
     takes = BeatTakeSerializer(many=True, read_only=True)
+    shots = ShotSerializer(many=True, read_only=True)
     character_ids = serializers.PrimaryKeyRelatedField(source="characters", many=True, read_only=True)
     prop_ids = serializers.PrimaryKeyRelatedField(source="props", many=True, read_only=True)
 
     class Meta:
         model = Beat
-        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes")
+        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes", "shots")
 
     def get_clip_uri(self, obj):
         locked = obj.takes.filter(status=BeatTake.Status.LOCKED).order_by("-number").first()
