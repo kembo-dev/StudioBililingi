@@ -9,9 +9,10 @@ from celery import shared_task
 def run_studio_job(self, job_id: int) -> dict:
     from apps.jobs.models import Job
     from apps.projects.continuity import render_beat
+    from apps.projects.services import render_shot
     from apps.projects.models import Project
     from apps.projects.visuals import generate_refs
-    from apps.story.models import Beat
+    from apps.story.models import Beat, Shot
 
     job = Job.objects.get(pk=job_id)
     job.status = Job.Status.RUNNING
@@ -19,9 +20,15 @@ def run_studio_job(self, job_id: int) -> dict:
     try:
         payload = job.payload or {}
         if job.kind == Job.Kind.VIDEO:
-            beat = Beat.objects.get(pk=payload["beat_id"])
-            render_beat(beat)
-            job.result = {"beat_id": beat.id, "status": beat.status}
+            if payload.get("shot_id"):
+                shot = Shot.objects.get(pk=payload["shot_id"])
+                render_shot(shot)
+                job.result = {"beat_id": shot.beat_id, "shot_id": shot.id, "status": shot.status}
+            else:
+                # Legacy jobs remain executable during the migration window.
+                beat = Beat.objects.get(pk=payload["beat_id"])
+                render_beat(beat)
+                job.result = {"beat_id": beat.id, "status": beat.status}
         elif job.kind == Job.Kind.IMAGE:
             project = Project.objects.get(pk=job.project_id)
             refs = generate_refs(project)
