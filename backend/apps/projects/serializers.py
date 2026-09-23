@@ -156,7 +156,7 @@ class ProjectCreateSerializer(serializers.Serializer):
     subgenre = serializers.CharField(required=False, allow_blank=True, default="")
     setting = serializers.CharField(required=False, allow_blank=True, default="")
     episode_count_target = serializers.IntegerField(required=False, allow_null=True, min_value=1, max_value=50, default=None)
-    episode_duration_seconds = serializers.IntegerField(required=False, min_value=15, max_value=1800, default=60)
+    episode_duration_seconds = serializers.IntegerField(required=False, allow_null=True, min_value=15, max_value=1800, default=None)
     tone = serializers.CharField(required=False, allow_blank=True, default="")
     ending_intent = serializers.CharField(required=False, allow_blank=True, default="")
     delivery = serializers.ChoiceField(choices=("storytell", "voix_off", "conversation", "rencontre"), required=False, default="storytell")
