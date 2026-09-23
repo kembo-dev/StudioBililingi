@@ -612,6 +612,28 @@ class ProductionPipelineTests(TestCase):
         )
 
 
+    def test_persist_beats_on_locked_plan_keeps_script_and_creates_segmentation_version(self):
+        from apps.story.models import ScenePlan, Segmentation
+        from apps.projects.services import persist_beats
+        script = Script.objects.create(episode=self.episode, version=1, fountain="Script canonique")
+        plan = ScenePlan.objects.create(episode=self.episode, script=script, version=1, locked=True, payload=[{"index": 1, "target_seconds": 8}])
+        before_scripts = self.episode.scripts.count()
+        beats = persist_beats(self.episode, [{"text": "Action distincte.", "scene_index": 1, "duration_seconds": 8}], script=script, scene_plan=plan)
+        self.assertEqual(self.episode.scripts.count(), before_scripts)
+        self.assertEqual(Segmentation.objects.filter(script=script).count(), 1)
+        self.assertEqual(beats[0].script_id, script.id)
+        self.assertIsNotNone(beats[0].segmentation_id)
+
+    def test_duration_budget_rejects_scene_far_over_target(self):
+        from apps.projects.services import _duration_budget_errors
+        errors = _duration_budget_errors(
+            [{"scene_index": 1, "duration_seconds": 8}, {"scene_index": 1, "duration_seconds": 8}, {"scene_index": 1, "duration_seconds": 8}],
+            [{"index": 1, "target_seconds": 10}],
+        )
+        self.assertTrue(errors)
+        self.assertIn("cible de 10s", errors[0])
+
+
     def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
         before_scripts = Script.objects.filter(episode=self.episode).count()
         before_beats = Beat.objects.filter(episode=self.episode).count()
