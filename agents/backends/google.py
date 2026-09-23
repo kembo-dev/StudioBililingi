@@ -201,10 +201,15 @@ class GoogleVideoBackend:
         usable = [uri for uri in (ingredients or []) if _usable(uri)]
         text = prompt
 
+        # Veo 3.1 accepts at most three asset reference images. Keep selection
+        # deterministic: callers order canonical refs by priority and stable UID.
+        max_reference_images = max(1, min(3, int(os.getenv("VEO_MAX_REFERENCE_IMAGES", "3"))))
+        selected_uris = usable[:max_reference_images]
+
         # Real visual conditioning: pass Studio refs to Veo as reference images
         # instead of merely mentioning their filesystem URI in the prompt.
         reference_images = []
-        for uri in usable[:3]:
+        for uri in selected_uris:
             image = _video_reference_image(types, uri)
             if image is not None:
                 reference_images.append(
