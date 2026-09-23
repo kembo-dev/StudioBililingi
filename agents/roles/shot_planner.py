@@ -24,7 +24,10 @@ class ShotPlanner:
                 "complète dans un shot et utilise les autres pour l'écoute, les gestes ou réactions réellement présents "
                 "dans le beat. N'invente aucun événement, personnage, lieu, objet ou dialogue. "
                 "video_prompt est autonome et filmable: sujet visible, action précise, éventuel dialogue exact, réaction, "
-                "cadrage/mouvement et continuité. Préserve strictement les ids et la continuité canonique fournis."
+                "cadrage/mouvement et continuité. Préserve strictement les ids et la continuité canonique fournis. "
+                "LANGUE: conserve mot pour mot tout dialogue dans sa langue d'origine. Ne traduis, ne paraphrase et ne "
+                "change jamais la langue d'une réplique. La voix et l'accent du personnage viennent de la BIBLE et restent "
+                "identiques entre les shots. Les références visuelles canoniques sont des contraintes d'identité strictes."
             ),
             user=f"BIBLE:\n{bible or {}}\n\nBEAT CANONIQUE:\n{beat}\n\nDUREES SHOTS (secondes):\n{durations}",
         )
