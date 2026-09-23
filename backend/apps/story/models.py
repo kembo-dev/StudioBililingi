@@ -101,7 +101,7 @@ class Beat(models.Model):
     segmentation = models.ForeignKey(Segmentation, on_delete=models.CASCADE, null=True, blank=True, related_name="beats")
     scene = models.ForeignKey(Scene, on_delete=models.SET_NULL, null=True, blank=True, related_name="beats")
     index = models.PositiveIntegerField()
-    text = models.TextField(help_text="~24 words of action / dialogue")
+    text = models.TextField(help_text="Narrative beat; length follows story meaning, not video clip limits.")
     word_count = models.PositiveSmallIntegerField(default=0)
     duration_seconds = models.DecimalField(max_digits=4, decimal_places=1, default=8)
     location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)
@@ -136,6 +136,52 @@ class Beat(models.Model):
     class Meta:
         unique_together = ("segmentation", "index")
         ordering = ["index"]
+
+
+class Shot(models.Model):
+    """Filmable unit inside a narrative Beat.
+
+    A Beat advances the story; a Shot is a renderable video unit. One Beat can
+    therefore remain semantically intact while being produced as several clips.
+    """
+    beat = models.ForeignKey(Beat, on_delete=models.CASCADE, related_name="shots")
+    index = models.PositiveSmallIntegerField()
+    text = models.TextField()
+    duration_seconds = models.DecimalField(max_digits=4, decimal_places=1, default=6)
+    video_prompt = models.TextField(blank=True)
+    negative_prompt = models.TextField(blank=True)
+    camera = models.JSONField(default=dict)
+    continuity = models.JSONField(default=dict)
+    status = models.CharField(max_length=24, choices=Beat.Status.choices, default=Beat.Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("beat", "index")
+        ordering = ["index"]
+
+
+class ShotTake(models.Model):
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RENDERING = "rendering", "Rendering"
+        REVIEW = "review", "Review"
+        REJECTED = "rejected", "Rejected"
+        LOCKED = "locked", "Locked"
+        FAILED = "failed", "Failed"
+
+    shot = models.ForeignKey(Shot, on_delete=models.CASCADE, related_name="takes")
+    number = models.PositiveIntegerField()
+    prompt = models.TextField(blank=True)
+    negative_prompt = models.TextField(blank=True)
+    backend = models.CharField(max_length=64, blank=True)
+    uri = models.CharField(max_length=1024, blank=True)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.QUEUED)
+    generation_meta = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("shot", "number")
+        ordering = ["number"]
 
 
 class BeatTake(models.Model):
