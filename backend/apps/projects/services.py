@@ -998,9 +998,42 @@ def _event_redundancy_errors(chunks: list[dict]) -> list[str]:
     return errors
 
 
-def _validate_segmented_beats(chunks: list, *, form: str, project: Project) -> None:
+def _duration_budget_errors(chunks: list[dict], scene_plan: list[dict]) -> list[str]:
+    errors = []
+    targets = {}
+    for scene in scene_plan:
+        try:
+            targets[int(scene.get("index"))] = float(scene.get("target_seconds") or 0)
+        except (TypeError, ValueError):
+            continue
+    actual = {index: 0.0 for index in targets}
+    for position, row in enumerate(chunks, start=1):
+        try:
+            scene_index = int(row.get("scene_index"))
+            seconds = float(row.get("duration_seconds") or 0)
+        except (TypeError, ValueError):
+            errors.append(f"beat {position}: durée ou scene_index invalide")
+            continue
+        if seconds <= 0:
+            errors.append(f"beat {position}: duration_seconds doit être positif")
+        actual[scene_index] = actual.get(scene_index, 0.0) + max(0.0, seconds)
+    for scene_index, target in targets.items():
+        if target <= 0:
+            continue
+        tolerance = max(4.0, target * 0.15)
+        value = actual.get(scene_index, 0.0)
+        if abs(value - target) > tolerance:
+            errors.append(
+                f"scène {scene_index}: beats totalisent {value:g}s pour une cible de {target:g}s (tolérance ±{tolerance:g}s)"
+            )
+    return errors
+
+
+def _validate_segmented_beats(chunks: list, *, form: str, project: Project, scene_plan: list[dict] | None = None) -> None:
     errors = _segmentation_errors(chunks, form=form, project=project)
     errors.extend(_event_redundancy_errors(chunks))
+    if scene_plan:
+        errors.extend(_duration_budget_errors(chunks, scene_plan))
     if errors:
         preview = "; ".join(errors[:8])
         raise ValueError(f"Segmentation refusée après correction automatique: {preview}.")
@@ -1275,7 +1308,34 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
         if ledger_errors:
             raise ValueError("Narrative Contract refusé: " + "; ".join(ledger_errors))
 
-    _validate_segmented_beats(chunks, form=project.delivery, project=project)
+    final_errors = _event_redundancy_errors(chunks) + _duration_budget_errors(chunks, scene_plan)
+    if final_errors:
+        feedback = (
+            "Corrige la segmentation sans changer le script ni le Scene Plan. Supprime/fusionne les répétitions, "
+            "et ajuste duration_seconds afin que la somme des beats de chaque scène respecte target_seconds. "
+            "Ne crée aucun remplissage. Erreurs: " + "; ".join(final_errors)
+        )
+        try:
+            raw = segmenter.segment(
+                text,
+                form=project.delivery,
+                bible=bible_payload,
+                feedback=feedback,
+                narrative_contract=contract_payload,
+                scene_plan=scene_plan,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"La correction durée/répétition de la segmentation a échoué: {exc}") from exc
+        chunks = normalize_beats(
+            _beat_chunks(raw, ""),
+            form=project.delivery,
+            resolve_character_names=resolver.names_for_row,
+        )
+        scene_plan_errors = _beat_scene_plan_errors(chunks, scene_plan)
+        if scene_plan_errors:
+            raise ValueError("Segmentation hors Scene Plan après correction: " + "; ".join(scene_plan_errors))
+
+    _validate_segmented_beats(chunks, form=project.delivery, project=project, scene_plan=scene_plan)
     return persist_beats(episode, chunks, script=script, scene_plan=stored_plan)
 
 
