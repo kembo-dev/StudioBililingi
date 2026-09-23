@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { api, mediaUrl } from "@/lib/api";
 
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
+type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
+type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; status: string; clip_uri?: string | null; takes: ShotTake[] };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
   id: number;
@@ -19,6 +21,7 @@ type Beat = {
   clip_uri?: string | null;
   ingredients?: { role?: string; name?: string; uri?: string }[];
   takes: BeatTake[];
+  shots: Shot[];
 };
 type PlannedScene = { index: number; heading: string; summary: string; location_id: string; time_of_day: string; character_ids: string[]; prop_ids: string[]; event_ids: string[]; target_seconds: number };
 type ScenePlan = { id: number; version: number; payload: PlannedScene[]; locked: boolean; created_at: string };
@@ -367,11 +370,32 @@ export default function ProjectPage() {
                       <span className="mr-2 text-[#e8c36a]">{String(beat.index + 1).padStart(2, "0")} \u00b7 {beat.word_count} mots \u00b7 {beat.status}</span>
                       {beat.text}
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => run(`ok-${beat.id}`, `/api/beats/${beat.id}/review/`, { decision: "approve" })} className="rounded border border-[#2a2e38] px-2 py-0.5 text-xs">Approuver</button>
-                      <button onClick={() => run(`no-${beat.id}`, `/api/beats/${beat.id}/review/`, { decision: "reject" })} className="rounded border border-[#2a2e38] px-2 py-0.5 text-xs">Rejeter</button>
-                      <button onClick={() => run(`rd-${beat.id}`, `/api/beats/${beat.id}/render/`)} className="rounded border border-[#e8c36a] px-2 py-0.5 text-xs text-[#e8c36a]">{busy === `rd-${beat.id}` ? "\u2026" : "Render stub"}</button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-[#2a2e38] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#9aa3b2]">Beat narratif</span>
+                      <button onClick={() => run(`shots-${beat.id}`, `/api/beats/${beat.id}/plan-shots/`)} className="rounded border border-[#e8c36a] px-2 py-0.5 text-xs text-[#e8c36a]">{busy === `shots-${beat.id}` ? "…" : beat.shots?.length ? "Shots préparés" : "Préparer les shots"}</button>
                     </div>
+                    {beat.shots?.length ? (
+                      <div className="space-y-2 border-l border-[#2a2e38] pl-3">
+                        {beat.shots.map((shot) => (
+                          <div key={shot.id} className="rounded-lg border border-[#2a2e38] bg-[#14161c] p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-[#e8c36a]">Shot vidéo {shot.index} · {Number(shot.duration_seconds).toFixed(1)}s · {shot.status}</p>
+                              <button onClick={() => run(`render-shot-${shot.id}`, `/api/shots/${shot.id}/render/`)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a]">{busy === `render-shot-${shot.id}` ? "Génération…" : "Générer un take"}</button>
+                            </div>
+                            <p className="mt-2 text-xs text-[#9aa3b2]">{shot.video_prompt || shot.text}</p>
+                            {shot.clip_uri ? <video controls className="mt-2 max-h-64 w-full rounded bg-black" src={mediaUrl(shot.clip_uri)} /> : null}
+                            {shot.takes?.length ? <div className="mt-2 flex flex-wrap gap-2">{shot.takes.map((take) => (
+                              <div key={take.id} className="flex items-center gap-2 rounded border border-[#2a2e38] px-2 py-1 text-xs">
+                                <span>Take {take.number} · {take.status}</span>
+                                {take.uri && take.status !== "locked" ? <button onClick={() => run(`lock-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "approve", take_id: take.id })} className="text-[#e8c36a]">Verrouiller</button> : null}
+                                {take.status === "locked" ? <span className="text-green-400">✓ choisi</span> : null}
+                                {take.uri && take.status !== "locked" ? <button onClick={() => run(`reject-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "reject", take_id: take.id })} className="text-red-300">Rejeter</button> : null}
+                              </div>
+                            ))}</div> : <p className="mt-2 text-[11px] text-[#6f7785]">Aucun take généré pour ce shot.</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-[11px] text-[#6f7785]">Ce beat raconte l’histoire. Prépare ses shots avant toute génération vidéo.</p>}
                     <div className="flex flex-wrap gap-2">
                       <input
                         className="min-w-48 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none"
