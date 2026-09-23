@@ -104,6 +104,45 @@ class ProductionPipelineTests(TestCase):
         ])
         self.assertTrue(all(shot.continuity["source_beat_text"] == beat.text for shot in shots))
 
+    def test_shot_planning_freezes_reference_uids_before_render(self):
+        from apps.production.models import Asset
+
+        persist_bible(self.project, {
+            "characters": [{"id": "amina", "name": "Amina", "look": "visage canonique"}],
+            "locations": [{"id": "gare", "name": "Gare", "look": "gare canonique"}],
+            "props": [{"id": "mallette", "name": "Mallette", "look": "mallette noire"}],
+        })
+        character = self.project.characters.get(key="amina")
+        location = self.project.locations.get(key="gare")
+        prop = self.project.props.get(key="mallette")
+        for role, key in [
+            (Asset.Role.CHARACTER_REF, "amina"),
+            (Asset.Role.LOCATION_REF, "gare"),
+            (Asset.Role.PROP_REF, "mallette"),
+        ]:
+            Asset.objects.create(
+                project=self.project,
+                kind=Asset.Kind.IMAGE,
+                role=role,
+                uri=f"/tmp/{key}.png",
+                meta={"key": key},
+            )
+        beat = persist_beats(self.episode, [{
+            "text": "Amina traverse la gare avec sa mallette.",
+            "character_ids": ["amina"],
+            "location_id": "gare",
+            "prop_ids": ["mallette"],
+            "scene_index": 1,
+            "duration_seconds": 8,
+        }])[0]
+
+        shot = plan_beat_shots(beat)[0]
+
+        self.assertEqual(
+            shot.reference_uids,
+            [character.reference_uid, location.reference_uid, prop.reference_uid],
+        )
+
     def test_shot_planning_rounds_up_unrepresentable_duration_without_content_loss(self):
         beat = persist_beats(self.episode, [{
             "text": "Le dialogue et l'action restent complets meme si la duree narrative est impaire.",
