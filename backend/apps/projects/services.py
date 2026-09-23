@@ -1425,28 +1425,69 @@ def _veo_shot_durations(total_seconds: float) -> list[int]:
 
 
 def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
-    """Create Veo-ready shots while preserving the complete narrative Beat."""
+    """Create semantically distinct Veo-ready shots without modifying the narrative Beat."""
     if beat.shots.exists():
         return list(beat.shots.order_by("index"))
 
+    from agents.roles.shot_planner import ShotPlanner
+
     text = str(beat.text or "").strip()
     durations = _veo_shot_durations(float(beat.duration_seconds or 1))
+    rows = []
+    if len(durations) == 1:
+        rows = [{
+            "index": 1,
+            "text": text,
+            "video_prompt": beat.video_prompt or text,
+            "camera": beat.camera or {},
+            "continuity": beat.continuity or {},
+        }]
+    else:
+        bible = beat.episode.season.project.bibles.order_by("-version").first()
+        bible_payload = bible.payload if bible else {}
+        payload = ShotPlanner().plan(
+            beat={
+                "text": text,
+                "dialogue": beat.dialogue,
+                "video_prompt": beat.video_prompt,
+                "camera": beat.camera,
+                "continuity": beat.continuity,
+                "emotion": beat.emotion,
+                "scene_index": beat.scene.index if beat.scene_id else None,
+                "narrative_event_id": beat.narrative_event.key if beat.narrative_event_id else None,
+            },
+            durations=durations,
+            bible=bible_payload,
+        )
+        rows = payload.get("shots") if isinstance(payload, dict) else None
+        if not isinstance(rows, list) or len(rows) != len(durations):
+            raise ValueError(
+                f"Shot Planner invalide: {len(durations)} shots attendus, "
+                f"{len(rows) if isinstance(rows, list) else 0} reçus"
+            )
+
     shots = []
-    for index, seconds in enumerate(durations, start=1):
+    for index, (seconds, row) in enumerate(zip(durations, rows), start=1):
+        shot_text = str(row.get("text") or "").strip()
+        video_prompt = str(row.get("video_prompt") or "").strip()
+        if not shot_text or not video_prompt:
+            raise ValueError(f"Shot Planner invalide: shot {index} sans contenu")
         shots.append(Shot.objects.create(
             beat=beat,
             index=index,
-            text=text,
+            text=shot_text,
             duration_seconds=seconds,
-            video_prompt=beat.video_prompt or text,
+            video_prompt=video_prompt,
             negative_prompt=beat.negative_prompt,
-            camera=beat.camera,
+            camera=row.get("camera") if isinstance(row.get("camera"), dict) else (beat.camera or {}),
             continuity={
                 **(beat.continuity or {}),
+                **(row.get("continuity") if isinstance(row.get("continuity"), dict) else {}),
                 "narrative_beat_seconds": float(beat.duration_seconds or 0),
                 "production_shot_seconds": seconds,
                 "shot_part": index,
                 "shot_parts": len(durations),
+                "source_beat_text": text,
             },
         ))
     return shots
