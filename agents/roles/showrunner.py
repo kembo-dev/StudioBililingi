@@ -11,7 +11,7 @@ class Showrunner:
     def __init__(self):
         self.text = get_text()
 
-    def plan(self, concept: str, *, delivery: str = "storytell") -> dict:
+    def plan(self, concept: str, *, delivery: str = "storytell", bible: dict | None = None) -> dict:
         return self.text.generate_json(
             system=(
                 "Tu es le showrunner de StudioBililingi. Construis un plan de saison STRICTEMENT spécifique au concept "
@@ -28,5 +28,5 @@ class Showrunner:
                 "Fin ou Twist en noms de personnages. Utilise les vrais personnages et enjeux du concept. "
                 f"Le mode de livraison est {delivery}; il influence la mise en scène, pas l'intrigue. Français naturel."
             ),
-            user=concept,
+            user=concept + f"\n\nBIBLE CANONIQUE VERROUILLEE:\n{bible or {}}",
         )
