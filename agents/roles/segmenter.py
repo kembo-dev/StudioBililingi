@@ -35,7 +35,7 @@ class BeatSegmenter:
                 "Un beat est une unité visuelle cohérente de 6 à 8 secondes avec une seule intention dramatique. "
                 "Ne crée jamais un clip autonome pour une micro-réplique ou réaction comme Non, Allô, Oui, un nom "
                 "ou une phrase de quelques mots: fusionne-la avec l'action, la réaction ou la réplique adjacente dans "
-                "la même scène. La cible de production est 24 mots par beat. Pour chaque beat, vise 20 à 28 mots; "
+                "la même scène. La cible de production est 24 mots par beat. Pour chaque beat, vise une longueur narrative naturelle; "
                 "ne dépasse jamais 32 mots. Si le contenu dépasse 32 mots, crée plusieurs beats en conservant le même "
                 "scene_index et la continuité, mais jamais en coupant une phrase existante au milieu. "
                 "Un beat de moins de 12 mots doit être fusionné avec un voisin compatible, "
