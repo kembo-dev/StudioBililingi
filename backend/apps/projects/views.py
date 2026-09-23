@@ -12,12 +12,14 @@ from apps.projects.services import (
     plan_scenes,
     persist_narrative_contract,
     review_beat,
+    review_shot,
+    plan_beat_shots,
     run_bible,
     run_segment,
     run_showrunner,
     write_script,
 )
-from apps.story.models import Beat, Episode
+from apps.story.models import Beat, Episode, Shot
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -310,9 +312,40 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({"job_id": job.id, "status": job.status, "result": job.result})
 
 
+class ShotViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Shot.objects.select_related("beat__episode__season__project").prefetch_related("takes")
+    serializer_class = __import__("apps.projects.serializers", fromlist=["ShotSerializer"]).ShotSerializer
+
+    @action(detail=True, methods=["post"])
+    def review(self, request, pk=None):
+        shot = self.get_object()
+        try:
+            review_shot(shot, request.data.get("decision", "approve"), request.data.get("comment", ""), take_id=request.data.get("take_id"))
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.serializer_class(self.get_queryset().get(pk=shot.pk)).data)
+
+    @action(detail=True, methods=["post"])
+    def render(self, request, pk=None):
+        from apps.jobs.models import Job
+        from apps.jobs.queue import enqueue, is_eager
+        shot = self.get_object()
+        job = enqueue(project=shot.beat.episode.season.project, kind=Job.Kind.VIDEO, agent_role="cinematographer", payload={"shot_id": shot.id})
+        if is_eager() and job.status == Job.Status.FAILED:
+            return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"job_id": job.id, "status": job.status, "result": job.result})
+
+
 class BeatViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Beat.objects.prefetch_related("assets").select_related("episode__season__project")
     serializer_class = BeatSerializer
+
+    @action(detail=True, methods=["post"], url_path="plan-shots")
+    def plan_shots(self, request, pk=None):
+        beat = self.get_object()
+        shots = plan_beat_shots(beat)
+        from apps.projects.serializers import ShotSerializer
+        return Response(ShotSerializer(shots, many=True).data)
 
     @action(detail=True, methods=["post"], url_path="recontextualize")
     def recontextualize(self, request, pk=None):
