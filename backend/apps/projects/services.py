@@ -1472,6 +1472,12 @@ def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
         video_prompt = str(row.get("video_prompt") or "").strip()
         if not shot_text or not video_prompt:
             raise ValueError(f"Shot Planner invalide: shot {index} sans contenu")
+        from apps.projects.continuity import resolve_ingredients
+        reference_uids = [
+            item["reference_uid"]
+            for item in resolve_ingredients(beat)["items"]
+            if item.get("reference_uid")
+        ]
         shots.append(Shot.objects.create(
             beat=beat,
             index=index,
@@ -1489,6 +1495,7 @@ def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
                 "shot_parts": len(durations),
                 "source_beat_text": text,
             },
+            reference_uids=reference_uids,
         ))
     return shots
 
