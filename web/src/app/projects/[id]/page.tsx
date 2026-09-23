@@ -8,7 +8,7 @@ import { api, mediaUrl } from "@/lib/api";
 
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
 type GenerationIngredient = { role?: string; key?: string; reference_uid?: string; uri?: string; name?: string };
-type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string } };
+type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string } };
 type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; reference_uids?: string[]; status: string; clip_uri?: string | null; takes: ShotTake[] };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
@@ -417,6 +417,21 @@ export default function ProjectPage() {
                             {shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running" ? <div className="mt-2 rounded border border-[#e8c36a]/30 bg-[#e8c36a]/5 px-3 py-2 text-xs text-[#e8c36a]"><p>{shotJobs[shot.id]?.status === "queued" ? "Take en file d’attente. Tu peux continuer à travailler, cette zone se met à jour automatiquement." : "Veo génère le clip. La vidéo apparaîtra ici automatiquement dès qu’elle sera prête."}</p><div className="mt-2 h-1 overflow-hidden rounded bg-[#2a2e38]"><div className="h-full w-1/2 animate-pulse rounded bg-[#e8c36a]" /></div></div> : null}
                             {shotJobs[shot.id]?.status === "succeeded" ? <p className="mt-2 text-xs text-green-400">✓ Take généré. La vidéo est prête à être visionnée et verrouillée.</p> : null}
                             <p className="mt-2 text-xs text-[#9aa3b2]">{shot.video_prompt || shot.text}</p>
+                            {shot.reference_uids?.length ? (
+                              <div className="mt-2 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
+                                <p className="text-[10px] uppercase tracking-[0.12em] text-[#e8c36a]">Références verrouillées pour ce shot · {shot.reference_uids.length}</p>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {shot.reference_uids.map((uid) => {
+                                    const ref = project.refs?.find((candidate) => candidate.reference_uid === uid || candidate.meta?.reference_uid === uid);
+                                    return <div key={uid} className="flex items-center gap-1 rounded border border-[#2a2e38] px-1.5 py-1 text-[10px]">
+                                      {ref?.uri ? <img src={mediaUrl(ref.uri)} alt={ref.meta?.name ?? ref.meta?.key ?? uid} className="h-8 w-8 rounded object-cover" /> : null}
+                                      <span>{ref?.meta?.name ?? ref?.meta?.key ?? "Référence"}</span>
+                                      <code className="text-[#6f7785]">{uid}</code>
+                                    </div>;
+                                  })}
+                                </div>
+                              </div>
+                            ) : <p className="mt-2 text-[10px] text-red-300">Aucune référence verrouillée sur ce shot.</p>}
                             <div className="mt-2 flex flex-wrap gap-2">
                               <input
                                 maxLength={4000}
@@ -436,15 +451,15 @@ export default function ProjectPage() {
                                 {take.uri && take.status !== "locked" ? <button onClick={() => run(`reject-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "reject", take_id: take.id })} className="text-red-300">Rejeter</button> : null}
                                 {take.generation_meta?.ingredients?.length ? (
                                   <details className="w-full basis-full border-t border-[#2a2e38] pt-2">
-                                    <summary className="cursor-pointer text-[10px] uppercase tracking-[0.12em] text-[#e8c36a]">Références Veo · {take.generation_meta.ingredients.length}</summary>
+                                    <summary className="cursor-pointer text-[10px] uppercase tracking-[0.12em] text-[#e8c36a]">Références Veo · {take.generation_meta.veo_reference_items?.length ?? 0} envoyée(s)</summary>
                                     <div className="mt-2 space-y-1">
-                                      {take.generation_meta.ingredients.map((item, refIndex) => (
+                                      {(take.generation_meta.media_items ?? take.generation_meta.ingredients).map((item, refIndex) => (
                                         <div key={item.reference_uid ?? `${item.key}-${refIndex}`} className="flex flex-wrap items-center gap-2 rounded bg-[#0b0c10] px-2 py-1 text-[10px]">
                                           <span className="text-[#e8c36a]">#{refIndex + 1}</span>
                                           <span>{item.role?.replaceAll("_", " ")}</span>
                                           <span className="font-medium">{item.name ?? item.key ?? "ref"}</span>
                                           {item.reference_uid ? <code className="text-[#9aa3b2]">UID {item.reference_uid}</code> : null}
-                                          {refIndex < 3 ? <span className="text-green-400">envoyée à Veo</span> : <span className="text-[#6f7785]">verrou logique</span>}
+                                          {take.generation_meta?.veo_reference_items?.some((sent) => sent.reference_uid === item.reference_uid) ? <span className="text-green-400">✓ envoyée à Veo</span> : <span className="text-[#6f7785]">verrou logique</span>}
                                         </div>
                                       ))}
                                       {take.generation_meta.previous_take?.number ? <p className="text-[10px] text-[#9aa3b2]">Baseline · Take {take.generation_meta.previous_take.number}</p> : null}
