@@ -34,16 +34,30 @@ class ProductionPipelineTests(TestCase):
             logline="Test",
         )
 
-    def test_resegmentation_preserves_previous_script_and_beats(self):
-        first = persist_beats(self.episode, [{"text": "Premier beat", "scene_index": 1}])
+    def test_resegmentation_preserves_script_and_previous_beats(self):
+        # Segmentation versions are independent from screenplay versions:
+        # re-segmenting must never manufacture a new Script.
+        script = Script.objects.create(
+            episode=self.episode,
+            version=1,
+            fountain="Script canonique",
+        )
+        first = persist_beats(
+            self.episode,
+            [{"text": "Premier beat", "scene_index": 1}],
+            script=script,
+        )
         first_id = first[0].id
-        first_script_id = first[0].script_id
 
-        second = persist_beats(self.episode, [{"text": "Deuxieme beat", "scene_index": 1}])
+        second = persist_beats(
+            self.episode,
+            [{"text": "Deuxieme beat", "scene_index": 1}],
+            script=script,
+        )
 
-        self.assertEqual(Script.objects.filter(episode=self.episode).count(), 2)
-        self.assertTrue(Beat.objects.filter(pk=first_id, script_id=first_script_id).exists())
-        self.assertNotEqual(second[0].script_id, first_script_id)
+        self.assertEqual(Script.objects.filter(episode=self.episode).count(), 1)
+        self.assertTrue(Beat.objects.filter(pk=first_id, script_id=script.id).exists())
+        self.assertEqual(second[0].script_id, script.id)
         self.assertEqual(self.episode.scenes.count(), 2)
 
     def test_structured_segmentation_metadata_is_persisted(self):
