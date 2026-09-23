@@ -5,7 +5,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
     dependencies = [
         ("story", "0007_shot_shottake"),
-        ("production", "0003_asset_beat_take_review_beat_take"),
+        ("production", "0002_asset_beat_take_review_beat_take_alter_asset_role"),
     ]
 
     operations = [
