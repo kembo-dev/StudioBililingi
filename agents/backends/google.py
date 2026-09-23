@@ -268,7 +268,18 @@ class GoogleVideoBackend:
             response = getattr(operation, "response", None) or getattr(operation, "result", None)
             videos = getattr(response, "generated_videos", None) or []
             if not videos:
-                raise RuntimeError(f"Veo returned no video ({model})")
+                filtered_count = getattr(response, "rai_media_filtered_count", None) if response else None
+                filtered_reasons = getattr(response, "rai_media_filtered_reasons", None) if response else None
+                operation_error = getattr(operation, "error", None)
+                details = []
+                if filtered_count:
+                    details.append(f"filtered_count={filtered_count}")
+                if filtered_reasons:
+                    details.append("filtered_reasons=" + "; ".join(str(reason) for reason in filtered_reasons))
+                if operation_error:
+                    details.append(f"operation_error={operation_error}")
+                suffix = f": {' | '.join(details)}" if details else ""
+                raise RuntimeError(f"Veo returned no video ({model}){suffix}")
             video = videos[0]
             video_file = getattr(video, "video", None)
             data = getattr(video_file, "video_bytes", None) if video_file else None
