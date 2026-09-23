@@ -1041,6 +1041,45 @@ def _duration_budget_errors(chunks: list[dict], scene_plan: list[dict], *, fixed
     return errors
 
 
+def _fit_scene_durations_without_loss(chunks: list[dict], scene_plan: list[dict]) -> list[dict]:
+    """Fit beat timings to locked scene targets without rewriting or dropping narrative content."""
+    targets = {}
+    for scene in scene_plan:
+        try:
+            index = int(scene.get("index"))
+            target = float(scene.get("target_seconds") or 0)
+        except (TypeError, ValueError):
+            continue
+        if target > 0:
+            targets[index] = target
+
+    fitted = [dict(row) for row in chunks]
+    by_scene = {}
+    for row in fitted:
+        try:
+            scene_index = int(row.get("scene_index"))
+            seconds = float(row.get("duration_seconds") or 0)
+        except (TypeError, ValueError):
+            continue
+        if scene_index in targets and seconds > 0:
+            by_scene.setdefault(scene_index, []).append(row)
+
+    for scene_index, rows in by_scene.items():
+        target = targets[scene_index]
+        total = sum(float(row.get("duration_seconds") or 0) for row in rows)
+        if total <= 0:
+            continue
+        scale = target / total
+        assigned = 0.0
+        for row in rows[:-1]:
+            seconds = max(0.1, round(float(row.get("duration_seconds") or 0) * scale, 1))
+            row["duration_seconds"] = seconds
+            assigned += seconds
+        if rows:
+            rows[-1]["duration_seconds"] = max(0.1, round(target - assigned, 1))
+    return fitted
+
+
 def _validate_segmented_beats(chunks: list, *, form: str, project: Project, scene_plan: list[dict] | None = None) -> None:
     errors = _segmentation_errors(chunks, form=form, project=project)
     errors.extend(_event_redundancy_errors(chunks))
@@ -1323,22 +1362,17 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
         if ledger_errors:
             raise ValueError("Narrative Contract refusé: " + "; ".join(ledger_errors))
 
-    final_errors = _event_redundancy_errors(chunks) + _duration_budget_errors(
-        chunks, scene_plan, fixed_episode_target=project.episode_duration_seconds
-    )
-    if final_errors:
+    # Narrative correction and timing correction are deliberately separate.
+    # The LLM may merge/remove only genuine narrative redundancies. Duration itself is
+    # fitted deterministically afterwards so no dialogue, event or action is lost.
+    redundancy_errors = _event_redundancy_errors(chunks)
+    if redundancy_errors:
         feedback = (
-            "Corrige la segmentation sans changer le script ni le Scene Plan. Le SCENE PLAN est une frontière stricte: "
-            "pour chaque beat, conserve un scene_index existant et utilise UNIQUEMENT un event_id présent dans event_ids "
-            "de cette même scène. Ne déplace jamais un EVxx vers une autre scène pour corriger la durée. "
-            "Supprime/fusionne les répétitions uniquement à l'intérieur d'une scène compatible, "
-            "et ajuste duration_seconds afin que la somme des beats de chaque scène respecte target_seconds. "
-            + (
-                f"La durée {project.episode_duration_seconds}s est imposée PAR ÉPISODE: compresse réellement actions et dialogues sans supprimer les EVxx. "
-                if project.episode_duration_seconds else
-                f"La durée est AUTOMATIQUE pour cet épisode: respecte sa durée naturelle de {_natural_episode_duration(scene_plan)}s définie par le Scene Plan. "
-            )
-            + "Ne crée aucun remplissage. Erreurs: " + "; ".join(final_errors)
+            "Corrige uniquement les répétitions narratives sans changer le script ni le Scene Plan. "
+            "Le SCENE PLAN est une frontière stricte: conserve chaque scene_index et utilise uniquement les event_ids "
+            "autorisés dans cette scène. Ne supprime aucune information narrative unique, aucun dialogue nécessaire, "
+            "aucune action nécessaire et aucun EVxx. Ne corrige PAS la durée en supprimant du contenu. Erreurs: "
+            + "; ".join(redundancy_errors)
         )
         try:
             raw = segmenter.segment(
@@ -1350,7 +1384,7 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
                 scene_plan=scene_plan,
             )
         except Exception as exc:
-            raise RuntimeError(f"La correction durée/répétition de la segmentation a échoué: {exc}") from exc
+            raise RuntimeError(f"La correction des répétitions de la segmentation a échoué: {exc}") from exc
         chunks = normalize_beats(
             _beat_chunks(raw, ""),
             form=project.delivery,
@@ -1359,6 +1393,8 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
         scene_plan_errors = _beat_scene_plan_errors(chunks, scene_plan)
         if scene_plan_errors:
             raise ValueError("Segmentation hors Scene Plan après correction: " + "; ".join(scene_plan_errors))
+
+    chunks = _fit_scene_durations_without_loss(chunks, scene_plan)
 
     _validate_segmented_beats(chunks, form=project.delivery, project=project, scene_plan=scene_plan)
     return persist_beats(episode, chunks, script=script, scene_plan=stored_plan)
