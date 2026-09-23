@@ -54,9 +54,23 @@ class ScenePlan(models.Model):
         ordering = ["-version"]
 
 
+class Segmentation(models.Model):
+    episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="segmentations")
+    script = models.ForeignKey(Script, on_delete=models.CASCADE, related_name="segmentations")
+    scene_plan = models.ForeignKey(ScenePlan, on_delete=models.PROTECT, related_name="segmentations")
+    version = models.PositiveIntegerField(default=1)
+    payload = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("script", "version")
+        ordering = ["-version"]
+
+
 class Scene(models.Model):
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="scenes")
     script = models.ForeignKey(Script, on_delete=models.CASCADE, related_name="scenes")
+    segmentation = models.ForeignKey(Segmentation, on_delete=models.CASCADE, null=True, blank=True, related_name="scenes")
     index = models.PositiveIntegerField()
     heading = models.CharField(max_length=240, blank=True)
     summary = models.TextField(blank=True)
@@ -68,7 +82,7 @@ class Scene(models.Model):
     props = models.ManyToManyField(Prop, blank=True)
 
     class Meta:
-        unique_together = ("script", "index")
+        unique_together = ("segmentation", "index")
         ordering = ["index"]
 
 
@@ -84,6 +98,7 @@ class Beat(models.Model):
 
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="beats")
     script = models.ForeignKey(Script, on_delete=models.SET_NULL, null=True, blank=True, related_name="beats")
+    segmentation = models.ForeignKey(Segmentation, on_delete=models.CASCADE, null=True, blank=True, related_name="beats")
     scene = models.ForeignKey(Scene, on_delete=models.SET_NULL, null=True, blank=True, related_name="beats")
     index = models.PositiveIntegerField()
     text = models.TextField(help_text="~24 words of action / dialogue")
@@ -119,7 +134,7 @@ class Beat(models.Model):
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.DRAFT)
 
     class Meta:
-        unique_together = ("script", "index")
+        unique_together = ("segmentation", "index")
         ordering = ["index"]
 
 
