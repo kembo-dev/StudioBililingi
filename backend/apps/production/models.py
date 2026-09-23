@@ -2,7 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.projects.models import Project
-from apps.story.models import Beat, BeatTake, Episode
+from apps.story.models import Beat, BeatTake, Episode, Shot, ShotTake
 
 
 class Asset(models.Model):
@@ -28,6 +28,8 @@ class Asset(models.Model):
         Beat, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets"
     )
     beat_take = models.ForeignKey(BeatTake, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
+    shot = models.ForeignKey(Shot, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
+    shot_take = models.ForeignKey(ShotTake, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
     kind = models.CharField(max_length=16, choices=Kind.choices)
     role = models.CharField(max_length=32, choices=Role.choices)
     uri = models.CharField(max_length=1024)
@@ -49,6 +51,8 @@ class Review(models.Model):
         Beat, on_delete=models.CASCADE, null=True, blank=True, related_name="reviews"
     )
     beat_take = models.ForeignKey(BeatTake, on_delete=models.CASCADE, null=True, blank=True, related_name="reviews")
+    shot = models.ForeignKey(Shot, on_delete=models.CASCADE, null=True, blank=True, related_name="reviews")
+    shot_take = models.ForeignKey(ShotTake, on_delete=models.CASCADE, null=True, blank=True, related_name="reviews")
     reviewer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )
