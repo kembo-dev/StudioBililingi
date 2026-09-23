@@ -111,13 +111,24 @@ class EpisodeSerializer(serializers.ModelSerializer):
     def _latest(self, obj):
         return obj.scripts.order_by("-version").first()
 
+    def _latest_segmentation(self, script):
+        return script.segmentations.order_by("-version").first() if script else None
+
     def get_beats(self, obj):
         script = self._latest(obj)
-        return BeatSerializer(script.beats.order_by("index"), many=True).data if script else []
+        if not script:
+            return []
+        segmentation = self._latest_segmentation(script)
+        queryset = segmentation.beats if segmentation else script.beats
+        return BeatSerializer(queryset.order_by("index"), many=True).data
 
     def get_scenes(self, obj):
         script = self._latest(obj)
-        return SceneSerializer(script.scenes.order_by("index"), many=True).data if script else []
+        if not script:
+            return []
+        segmentation = self._latest_segmentation(script)
+        queryset = segmentation.scenes if segmentation else script.scenes
+        return SceneSerializer(queryset.order_by("index"), many=True).data
 
     def get_scene_plans(self, obj):
         script = self._latest(obj)
