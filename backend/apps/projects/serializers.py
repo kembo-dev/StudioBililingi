@@ -58,7 +58,7 @@ class ShotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Shot
-        fields = ("id", "index", "text", "duration_seconds", "video_prompt", "negative_prompt", "camera", "continuity", "status", "clip_uri", "takes")
+        fields = ("id", "index", "text", "duration_seconds", "video_prompt", "negative_prompt", "camera", "continuity", "reference_uids", "status", "clip_uri", "takes")
 
     def get_clip_uri(self, obj):
         locked = obj.takes.filter(status=ShotTake.Status.LOCKED).order_by("-number").first()
