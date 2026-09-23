@@ -1540,8 +1540,11 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
         status=ShotTake.Status.RENDERING,
         generation_meta={
             "ingredients": pack["items"],
+            "reference_uids": list(shot.reference_uids or []),
             "continuity": package["context"],
+            "previous_take": package.get("previous_take"),
             "language_locked": bool(shot.beat.dialogue),
+            "dialogue_language_policy": "exact_original_language",
             "adjustment_prompt": str(adjustment_prompt or "").strip(),
         },
     )
@@ -1576,8 +1579,11 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
             "prompt": prompt,
             "shot_index": shot.index,
             "ingredients": pack["items"],
+            "reference_uids": list(shot.reference_uids or []),
             "continuity": package["context"],
+            "previous_take": package.get("previous_take"),
             "language_locked": bool(shot.beat.dialogue),
+            "dialogue_language_policy": "exact_original_language",
         },
     )
     shot.status = Beat.Status.REVIEW
