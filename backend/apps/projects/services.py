@@ -9,7 +9,7 @@ from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
-from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script
+from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script, Segmentation
 from apps.projects.beat_normalizer import normalize_beats, speaker_label, _speaker_occurrences
 from apps.projects.character_resolver import CharacterResolver, identity_token, normalize_bible_payload
 from apps.projects.story_normalizer import bible_errors, normalize_story_bible, script_conversation_errors
@@ -351,7 +351,7 @@ def _scene_contract_errors(rows: list[dict]) -> list[str]:
 
 
 @transaction.atomic
-def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
+def persist_beats(episode: Episode, chunks: list, *, script: Script | None = None, scene_plan: ScenePlan | None = None) -> list[Beat]:
     """Persist a new immutable segmentation version.
 
     Previous scripts/beats are preserved. Structured segmenter metadata is
@@ -362,12 +362,31 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
     contract_errors = _scene_contract_errors(rows)
     if contract_errors:
         raise ValueError("Segmentation refusée: " + "; ".join(contract_errors))
-    script = Script.objects.create(
-        episode=episode,
-        version=episode.scripts.count() + 1,
-        fountain="\n".join(str(row.get("text") or "") for row in rows),
-        payload={"beats": rows},
-    )
+    script = script or episode.scripts.order_by("-version").first()
+    if script is None:
+        # Compatibility for direct/legacy callers. The production pipeline
+        # always supplies the canonical screenplay explicitly.
+        script = Script.objects.create(
+            episode=episode,
+            version=episode.scripts.count() + 1,
+            fountain="\n".join(str(row.get("text") or "") for row in rows),
+            payload={"source": "legacy-segmentation"},
+        )
+    if scene_plan is None:
+        scene_plan = script.scene_plans.filter(locked=True).order_by("-version").first()
+    if scene_plan is None:
+        # Legacy tests/tools can still persist beats without a Scene Plan, but
+        # normal run_segment always provides the locked production plan.
+        segmentation = None
+    else:
+        latest_segmentation = script.segmentations.order_by("-version").first()
+        segmentation = Segmentation.objects.create(
+            episode=episode,
+            script=script,
+            scene_plan=scene_plan,
+            version=(latest_segmentation.version + 1) if latest_segmentation else 1,
+            payload=rows,
+        )
     created = []
     scenes: dict[int, Scene] = {}
     resolver = CharacterResolver(project)
@@ -386,6 +405,7 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
             scene = Scene.objects.create(
                 episode=episode,
                 script=script,
+                segmentation=segmentation,
                 index=scene_index,
                 heading=_fit_model_text(Scene, "heading", row.get("scene_heading") or row.get("heading") or ""),
                 summary=str(row.get("scene_summary") or ""),
@@ -427,6 +447,7 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
         beat = Beat.objects.create(
             episode=episode,
             script=script,
+            segmentation=segmentation,
             scene=scene,
             narrative_event=narrative_event,
             index=index,
@@ -470,7 +491,7 @@ def persist_beats(episode: Episode, chunks: list) -> list[Beat]:
         status=Job.Status.SUCCEEDED,
         agent_role="beat_segmenter",
         backend="stub-text",
-        result={"episode_id": episode.id, "script_id": script.id, "beats": len(created)},
+        result={"episode_id": episode.id, "script_id": script.id, "segmentation_id": segmentation.id if segmentation else None, "beats": len(created)},
     )
     return created
 
@@ -1255,7 +1276,7 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
             raise ValueError("Narrative Contract refusé: " + "; ".join(ledger_errors))
 
     _validate_segmented_beats(chunks, form=project.delivery, project=project)
-    return persist_beats(episode, chunks)
+    return persist_beats(episode, chunks, script=script, scene_plan=stored_plan)
 
 
 def review_beat(beat: Beat, decision: str, comment: str = "", take_id: int | None = None) -> Beat:
