@@ -68,6 +68,7 @@ export default function ProjectPage() {
   const [refNotice, setRefNotice] = useState("");
   const [promptRef, setPromptRef] = useState<Ref | null>(null);
   const [refPrompt, setRefPrompt] = useState("");
+  const [shotJobs, setShotJobs] = useState<Record<number, Job>>({});
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
@@ -104,6 +105,35 @@ export default function ProjectPage() {
       }
     } catch (err) {
       setRefNotice("");
+      setError(String(err));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function generateShotTake(shotId: number) {
+    const key = `render-shot-${shotId}`;
+    setBusy(key);
+    setError("");
+    try {
+      const response = await api<{ job_id: number; status: Job["status"] }>(`/api/shots/${shotId}/render/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      let job = await api<Job>(`/api/jobs/${response.job_id}/`);
+      setShotJobs((current) => ({ ...current, [shotId]: job }));
+      await load();
+      while (job.status === "queued" || job.status === "running") {
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        job = await api<Job>(`/api/jobs/${response.job_id}/`);
+        setShotJobs((current) => ({ ...current, [shotId]: job }));
+        await load();
+      }
+      await load();
+      if (job.status !== "succeeded") {
+        setError(job.error || "La génération du take a échoué.");
+      }
+    } catch (err) {
       setError(String(err));
     } finally {
       setBusy("");
@@ -380,8 +410,10 @@ export default function ProjectPage() {
                           <div key={shot.id} className="rounded-lg border border-[#2a2e38] bg-[#14161c] p-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <p className="text-xs font-medium text-[#e8c36a]">Shot vidéo {shot.index} · {Number(shot.duration_seconds).toFixed(1)}s · {shot.status}</p>
-                              <button onClick={() => run(`render-shot-${shot.id}`, `/api/shots/${shot.id}/render/`)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a]">{busy === `render-shot-${shot.id}` ? "Génération…" : "Générer un take"}</button>
+                              <button disabled={busy === `render-shot-${shot.id}` || shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running"} onClick={() => generateShotTake(shot.id)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a] disabled:cursor-wait disabled:opacity-50">{shotJobs[shot.id]?.status === "queued" ? "En file d’attente…" : shotJobs[shot.id]?.status === "running" ? "Vidéo en génération…" : busy === `render-shot-${shot.id}` ? "Démarrage…" : "Générer un take"}</button>
                             </div>
+                            {shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running" ? <div className="mt-2 rounded border border-[#e8c36a]/30 bg-[#e8c36a]/5 px-3 py-2 text-xs text-[#e8c36a]"><p>{shotJobs[shot.id]?.status === "queued" ? "Take en file d’attente. Tu peux continuer à travailler, cette zone se met à jour automatiquement." : "Veo génère le clip. La vidéo apparaîtra ici automatiquement dès qu’elle sera prête."}</p><div className="mt-2 h-1 overflow-hidden rounded bg-[#2a2e38]"><div className="h-full w-1/2 animate-pulse rounded bg-[#e8c36a]" /></div></div> : null}
+                            {shotJobs[shot.id]?.status === "succeeded" ? <p className="mt-2 text-xs text-green-400">✓ Take généré. La vidéo est prête à être visionnée et verrouillée.</p> : null}
                             <p className="mt-2 text-xs text-[#9aa3b2]">{shot.video_prompt || shot.text}</p>
                             {shot.clip_uri ? <video controls className="mt-2 max-h-64 w-full rounded bg-black" src={mediaUrl(shot.clip_uri)} /> : null}
                             {shot.takes?.length ? <div className="mt-2 flex flex-wrap gap-2">{shot.takes.map((take) => (
