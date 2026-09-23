@@ -1540,6 +1540,8 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
         status=ShotTake.Status.RENDERING,
         generation_meta={
             "ingredients": pack["items"],
+            "media_items": pack.get("media_items", []),
+            "veo_reference_items": pack.get("media_items", [])[:3],
             "reference_uids": list(shot.reference_uids or []),
             "continuity": package["context"],
             "previous_take": package.get("previous_take"),
@@ -1579,6 +1581,8 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
             "prompt": prompt,
             "shot_index": shot.index,
             "ingredients": pack["items"],
+            "media_items": pack.get("media_items", []),
+            "veo_reference_items": pack.get("media_items", [])[:3],
             "reference_uids": list(shot.reference_uids or []),
             "continuity": package["context"],
             "previous_take": package.get("previous_take"),
