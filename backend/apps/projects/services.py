@@ -1518,12 +1518,12 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
     return shot
 
 
-def render_shot(shot: Shot) -> Shot:
+def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
     from agents.backends import get_video
     from apps.production.models import Asset
     from apps.projects.continuity import shot_render_package
 
-    package = shot_render_package(shot)
+    package = shot_render_package(shot, adjustment_prompt=adjustment_prompt)
     if not package["ready"]:
         raise ValueError("Rendu vidéo refusé: " + "; ".join(package["errors"]))
 
@@ -1542,6 +1542,7 @@ def render_shot(shot: Shot) -> Shot:
             "ingredients": pack["items"],
             "continuity": package["context"],
             "language_locked": bool(shot.beat.dialogue),
+            "adjustment_prompt": str(adjustment_prompt or "").strip(),
         },
     )
     backend = get_video()
