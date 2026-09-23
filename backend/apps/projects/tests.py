@@ -11,7 +11,7 @@ from apps.projects.models import NarrativeContract, Project, Season
 from apps.projects.character_resolver import CharacterResolver
 from apps.projects.beat_normalizer import normalize_beats
 from apps.projects.continuity import build_continuity_context, continuity_prompt, validate_render_readiness
-from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat
+from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat, plan_beat_shots
 from apps.story.models import Beat, BeatTake, Episode, Scene, Script
 from apps.bible.models import Character, Location, Prop
 
@@ -59,6 +59,18 @@ class ProductionPipelineTests(TestCase):
         self.assertTrue(Beat.objects.filter(pk=first_id, script_id=script.id).exists())
         self.assertEqual(second[0].script_id, script.id)
         self.assertEqual(self.episode.scenes.count(), 2)
+
+    def test_long_narrative_beat_can_produce_multiple_shots(self):
+        beat = persist_beats(self.episode, [{
+            "text": "Malaika explique longuement son echec professionnel pendant que Safia ecoute sans interrompre et lui sert calmement une tasse de the.",
+            "scene_index": 1,
+            "duration_seconds": 18,
+        }])[0]
+        shots = plan_beat_shots(beat, max_shot_seconds=8)
+        self.assertEqual(len(shots), 3)
+        self.assertEqual(beat.text, shots[0].text)
+        self.assertAlmostEqual(sum(float(shot.duration_seconds) for shot in shots), 18.0, places=1)
+        self.assertTrue(all(float(shot.duration_seconds) <= 8 for shot in shots))
 
     def test_structured_segmentation_metadata_is_persisted(self):
         beat = persist_beats(self.episode, [{
