@@ -142,7 +142,7 @@ def project_constraints_payload(project: Project) -> dict:
     }
 
 
-def create_project(*, title: str, concept: str, genre: str = "", subgenre: str = "", setting: str = "", tone: str = "", ending_intent: str = "", episode_count_target: int | None = None, episode_duration_seconds: int = 60, delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
+def create_project(*, title: str, concept: str, genre: str = "", subgenre: str = "", setting: str = "", tone: str = "", ending_intent: str = "", episode_count_target: int | None = None, episode_duration_seconds: int | None = None, delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
     org = _ensure_org(organization_name)
     base = slugify(title) or "projet"
     slug = base
@@ -998,7 +998,18 @@ def _event_redundancy_errors(chunks: list[dict]) -> list[str]:
     return errors
 
 
-def _duration_budget_errors(chunks: list[dict], scene_plan: list[dict]) -> list[str]:
+def _natural_episode_duration(scene_plan: list[dict]) -> int:
+    """Use the validated Scene Plan as the natural per-episode duration budget."""
+    total = 0
+    for scene in scene_plan:
+        try:
+            total += max(0, int(scene.get("target_seconds") or 0))
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _duration_budget_errors(chunks: list[dict], scene_plan: list[dict], *, fixed_episode_target: int | None = None) -> list[str]:
     errors = []
     targets = {}
     for scene in scene_plan:
@@ -1020,7 +1031,8 @@ def _duration_budget_errors(chunks: list[dict], scene_plan: list[dict]) -> list[
     for scene_index, target in targets.items():
         if target <= 0:
             continue
-        tolerance = max(4.0, target * 0.15)
+        tolerance_ratio = 0.10 if fixed_episode_target else 0.15
+        tolerance = max(3.0 if fixed_episode_target else 4.0, target * tolerance_ratio)
         value = actual.get(scene_index, 0.0)
         if abs(value - target) > tolerance:
             errors.append(
@@ -1033,7 +1045,7 @@ def _validate_segmented_beats(chunks: list, *, form: str, project: Project, scen
     errors = _segmentation_errors(chunks, form=form, project=project)
     errors.extend(_event_redundancy_errors(chunks))
     if scene_plan:
-        errors.extend(_duration_budget_errors(chunks, scene_plan))
+        errors.extend(_duration_budget_errors(chunks, scene_plan, fixed_episode_target=project.episode_duration_seconds))
     if errors:
         preview = "; ".join(errors[:8])
         raise ValueError(f"Segmentation refusée après correction automatique: {preview}.")
@@ -1094,12 +1106,14 @@ def _scene_plan_errors(
     missing = sorted(expected_events - used_events)
     if missing:
         errors.append("événements sans scène: " + ", ".join(missing))
-    target = int(project.episode_duration_seconds or 60)
-    tolerance = max(10, round(target * 0.25))
-    if scenes and abs(total_seconds - target) > tolerance:
-        errors.append(
-            f"durée du scene plan {total_seconds}s hors cible {target}s (tolérance ±{tolerance}s)"
-        )
+    target = project.episode_duration_seconds
+    if target:
+        target = int(target)
+        tolerance = max(10, round(target * 0.25))
+        if scenes and abs(total_seconds - target) > tolerance:
+            errors.append(
+                f"durée du scene plan {total_seconds}s hors cible épisode {target}s (tolérance ±{tolerance}s)"
+            )
     return errors
 
 
@@ -1308,12 +1322,19 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
         if ledger_errors:
             raise ValueError("Narrative Contract refusé: " + "; ".join(ledger_errors))
 
-    final_errors = _event_redundancy_errors(chunks) + _duration_budget_errors(chunks, scene_plan)
+    final_errors = _event_redundancy_errors(chunks) + _duration_budget_errors(
+        chunks, scene_plan, fixed_episode_target=project.episode_duration_seconds
+    )
     if final_errors:
         feedback = (
             "Corrige la segmentation sans changer le script ni le Scene Plan. Supprime/fusionne les répétitions, "
             "et ajuste duration_seconds afin que la somme des beats de chaque scène respecte target_seconds. "
-            "Ne crée aucun remplissage. Erreurs: " + "; ".join(final_errors)
+            + (
+                f"La durée {project.episode_duration_seconds}s est imposée PAR ÉPISODE: compresse réellement actions et dialogues sans supprimer les EVxx. "
+                if project.episode_duration_seconds else
+                f"La durée est AUTOMATIQUE pour cet épisode: respecte sa durée naturelle de {_natural_episode_duration(scene_plan)}s définie par le Scene Plan. "
+            )
+            + "Ne crée aucun remplissage. Erreurs: " + "; ".join(final_errors)
         )
         try:
             raw = segmenter.segment(
