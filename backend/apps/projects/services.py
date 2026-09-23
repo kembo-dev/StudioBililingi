@@ -1429,7 +1429,19 @@ def render_shot(shot: Shot) -> Shot:
     take.backend = getattr(backend, "provider_id", "")
     take.save(update_fields=["backend"])
     prompt = shot.video_prompt or shot.text
-    uri = backend.render(prompt, duration_seconds=float(shot.duration_seconds), aspect_ratio=shot.beat.episode.season.project.aspect_ratio)
+    try:
+        uri = backend.render(
+            prompt,
+            duration_seconds=float(shot.duration_seconds),
+            aspect_ratio=shot.beat.episode.season.project.aspect_ratio,
+        )
+    except Exception as exc:
+        take.status = ShotTake.Status.FAILED
+        take.generation_meta = {**(take.generation_meta or {}), "error": str(exc)}
+        take.save(update_fields=["status", "generation_meta"])
+        shot.status = Beat.Status.REJECTED
+        shot.save(update_fields=["status"])
+        raise
     take.uri = uri
     take.status = ShotTake.Status.REVIEW
     take.save(update_fields=["uri", "status"])
