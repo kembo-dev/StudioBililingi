@@ -1521,22 +1521,39 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
 def render_shot(shot: Shot) -> Shot:
     from agents.backends import get_video
     from apps.production.models import Asset
+    from apps.projects.continuity import shot_render_package
+
+    package = shot_render_package(shot)
+    if not package["ready"]:
+        raise ValueError("Rendu vidéo refusé: " + "; ".join(package["errors"]))
+
     shot.status = Beat.Status.RENDERING
     shot.save(update_fields=["status"])
     number = (shot.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
+    prompt = package["prompt"]
+    pack = package["ingredients"]
     take = ShotTake.objects.create(
-        shot=shot, number=number, prompt=shot.video_prompt or shot.text,
-        negative_prompt=shot.negative_prompt, status=ShotTake.Status.RENDERING,
+        shot=shot,
+        number=number,
+        prompt=prompt,
+        negative_prompt=shot.negative_prompt,
+        status=ShotTake.Status.RENDERING,
+        generation_meta={
+            "ingredients": pack["items"],
+            "continuity": package["context"],
+            "language_locked": bool(shot.beat.dialogue),
+        },
     )
     backend = get_video()
     take.backend = getattr(backend, "provider_id", "")
     take.save(update_fields=["backend"])
-    prompt = shot.video_prompt or shot.text
-    project = shot.beat.episode.season.project
+    project = package["project"]
     project_key = f"{project.id}-{project.slug}"
     try:
         uri = backend.render(
             prompt,
+            start_frame=pack["start_frame"],
+            ingredients=pack["uris"],
             duration_seconds=float(shot.duration_seconds),
             aspect_ratio=project.aspect_ratio,
             project_key=project_key,
@@ -1552,14 +1569,19 @@ def render_shot(shot: Shot) -> Shot:
     take.status = ShotTake.Status.REVIEW
     take.save(update_fields=["uri", "status"])
     Asset.objects.create(
-        project=shot.beat.episode.season.project, beat=shot.beat, shot=shot, shot_take=take,
+        project=project, beat=shot.beat, shot=shot, shot_take=take,
         kind=Asset.Kind.VIDEO, role=Asset.Role.CLIP, uri=uri, provider=take.backend,
-        meta={"prompt": prompt, "shot_index": shot.index},
+        meta={
+            "prompt": prompt,
+            "shot_index": shot.index,
+            "ingredients": pack["items"],
+            "continuity": package["context"],
+            "language_locked": bool(shot.beat.dialogue),
+        },
     )
     shot.status = Beat.Status.REVIEW
     shot.save(update_fields=["status"])
     return shot
-
 
 def review_beat(beat: Beat, decision: str, comment: str = "", take_id: int | None = None) -> Beat:
     from apps.production.models import Review
