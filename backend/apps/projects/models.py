@@ -32,7 +32,7 @@ class Project(models.Model):
     subgenre = models.CharField(max_length=80, blank=True)
     setting = models.CharField(max_length=160, blank=True, help_text="Cadre géographique/culturel canonique du projet.")
     episode_count_target = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Nombre d'épisodes souhaité; vide = automatique.")
-    episode_duration_seconds = models.PositiveSmallIntegerField(default=60, help_text="Durée cible approximative par épisode.")
+    episode_duration_seconds = models.PositiveSmallIntegerField(null=True, blank=True, default=None, help_text="Durée cible par épisode en secondes; vide = durée naturelle automatique par épisode.")
     tone = models.CharField(max_length=80, blank=True)
     ending_intent = models.TextField(blank=True)
     aspect_ratio = models.CharField(max_length=16, default="16:9")
