@@ -140,17 +140,17 @@ def resolve_ingredients(beat: Beat) -> dict:
     for character in beat.characters.all():
         asset = _latest_ref(project, Asset.Role.CHARACTER_REF, character.key)
         if asset:
-            picked.append({"role": asset.role, "key": character.key, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
+            picked.append({"role": asset.role, "key": character.key, "reference_uid": character.reference_uid, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
 
     if beat.location_id:
         loc = _latest_ref(project, Asset.Role.LOCATION_REF, beat.location.key)
         if loc:
-            picked.append({"role": loc.role, "key": beat.location.key, "uri": loc.uri, "name": (loc.meta or {}).get("name")})
+            picked.append({"role": loc.role, "key": beat.location.key, "reference_uid": beat.location.reference_uid, "uri": loc.uri, "name": (loc.meta or {}).get("name")})
 
     for prop in beat.props.all():
         asset = _latest_ref(project, Asset.Role.PROP_REF, prop.key)
         if asset:
-            picked.append({"role": asset.role, "key": prop.key, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
+            picked.append({"role": asset.role, "key": prop.key, "reference_uid": prop.reference_uid, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
 
     uris = [item["uri"] for item in picked if item.get("uri")]
     start = next((item["uri"] for item in picked if item["role"] == Asset.Role.LOCATION_REF), None)
@@ -189,6 +189,17 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         "REFERENCE IMAGE LOCK: character reference images are identity constraints, not inspiration. "
         "Preserve the same face, age, skin tone, hair and wardrobe visible in the supplied references."
     )
+    uid_lines = [
+        f"{item['role']} UID={item.get('reference_uid')} KEY={item.get('key')} NAME={item.get('name')}"
+        for item in pack["items"] if item.get("reference_uid")
+    ]
+    if uid_lines:
+        lines.extend([
+            "",
+            "CANONICAL REFERENCE UID LOCK:",
+            *uid_lines,
+            "Every occurrence of the same UID across beats and shots is the exact same canonical entity. Never reinterpret or replace it.",
+        ])
     adjustment = str(adjustment_prompt or "").strip()
     if adjustment:
         lines.extend([
