@@ -7,7 +7,7 @@ from django.test import TestCase
 from apps.accounts.models import Organization
 from apps.production.models import Review
 from apps.projects.assembly import assemble_episode
-from apps.projects.models import Project, Season
+from apps.projects.models import NarrativeContract, Project, Season
 from apps.projects.character_resolver import CharacterResolver
 from apps.projects.beat_normalizer import normalize_beats
 from apps.projects.continuity import build_continuity_context, continuity_prompt, validate_render_readiness
