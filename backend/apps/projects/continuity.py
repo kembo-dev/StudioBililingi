@@ -132,8 +132,8 @@ def continuity_prompt(beat: Beat, context: dict) -> str:
     return "\n".join(lines)
 
 
-def resolve_ingredients(beat: Beat) -> dict:
-    """Resolve only references explicitly attached to the beat."""
+def resolve_ingredients(beat: Beat, *, reference_uids: list[str] | None = None) -> dict:
+    """Resolve canonical media refs, optionally restricted to explicit stable UIDs."""
     project = beat.episode.season.project
     picked = []
 
@@ -152,6 +152,11 @@ def resolve_ingredients(beat: Beat) -> dict:
         if asset:
             picked.append({"role": asset.role, "key": prop.key, "reference_uid": prop.reference_uid, "uri": asset.uri, "name": (asset.meta or {}).get("name")})
 
+    requested_uids = [str(uid) for uid in (reference_uids or []) if str(uid).strip()]
+    if requested_uids:
+        by_uid = {str(item.get("reference_uid")): item for item in picked}
+        picked = [by_uid[uid] for uid in requested_uids if uid in by_uid]
+
     uris = [item["uri"] for item in picked if item.get("uri")]
     start = next((item["uri"] for item in picked if item["role"] == Asset.Role.LOCATION_REF), None)
     return {"items": picked, "uris": uris, "start_frame": start}
@@ -162,8 +167,17 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     beat = shot.beat
     readiness = validate_render_readiness(beat)
     context = readiness["context"]
-    pack = readiness["ingredients"]
+    # Freeze the exact canonical entities used by this shot. The UID list is
+    # persisted on Shot so every later take/re-adjustment resolves the same refs.
+    canonical_pack = readiness["ingredients"]
+    if not shot.reference_uids:
+        shot.reference_uids = [
+            item["reference_uid"] for item in canonical_pack["items"] if item.get("reference_uid")
+        ]
+        shot.save(update_fields=["reference_uids"])
+    pack = resolve_ingredients(beat, reference_uids=shot.reference_uids)
     project = beat.episode.season.project
+    previous_take = shot.takes.exclude(uri="").order_by("-number").first()
 
     lines = [
         shot.video_prompt or shot.text,
@@ -201,6 +215,12 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
             "Every occurrence of the same UID across beats and shots is the exact same canonical entity. Never reinterpret or replace it.",
         ])
     adjustment = str(adjustment_prompt or "").strip()
+    if adjustment and previous_take:
+        lines.extend([
+            "",
+            "PREVIOUS TAKE CONTINUITY:",
+            f"Previous take #{previous_take.number} is the presentation baseline. Preserve all canonical identity, set, wardrobe, voice and language continuity from it; change only what the user explicitly requests.",
+        ])
     if adjustment:
         lines.extend([
             "",
@@ -215,6 +235,10 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         "project": project,
         "ingredients": pack,
         "context": context,
+        "previous_take": (
+            {"id": previous_take.id, "number": previous_take.number, "uri": previous_take.uri}
+            if previous_take else None
+        ),
     }
 
 
