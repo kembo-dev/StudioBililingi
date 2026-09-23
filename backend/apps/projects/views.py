@@ -330,6 +330,7 @@ class ShotViewSet(viewsets.ReadOnlyModelViewSet):
         from apps.jobs.models import Job
         from apps.jobs.queue import enqueue, is_eager
         shot = self.get_object()
+        adjustment_prompt = str(request.data.get("prompt") or request.data.get("adjustment_prompt") or "").strip()
         active = Job.objects.filter(
             project=shot.beat.episode.season.project,
             kind=Job.Kind.VIDEO,
@@ -337,8 +338,13 @@ class ShotViewSet(viewsets.ReadOnlyModelViewSet):
             payload__shot_id=shot.id,
         ).order_by("-created_at").first()
         if active is not None:
+            active_prompt = str((active.payload or {}).get("adjustment_prompt") or "").strip()
+            if active_prompt != adjustment_prompt:
+                return Response(
+                    {"detail": "Un take est déjà en génération pour ce shot. Attends sa fin avant de lancer un nouveau réajustement."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             return Response({"job_id": active.id, "status": active.status, "result": active.result})
-        adjustment_prompt = str(request.data.get("prompt") or request.data.get("adjustment_prompt") or "").strip()
         if len(adjustment_prompt) > 4000:
             return Response({"detail": "Le prompt de réajustement est limité à 4000 caractères"}, status=status.HTTP_400_BAD_REQUEST)
         job = enqueue(
