@@ -9,7 +9,7 @@ from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
-from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script, Segmentation, Shot
+from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script, Segmentation, Shot, ShotTake
 from apps.projects.beat_normalizer import normalize_beats, speaker_label, _speaker_occurrences
 from apps.projects.character_resolver import CharacterResolver, identity_token, normalize_bible_payload
 from apps.projects.story_normalizer import bible_errors, normalize_story_bible, script_conversation_errors
@@ -1387,6 +1387,60 @@ def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
             continuity=beat.continuity,
         ))
     return shots
+
+
+def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | None = None) -> Shot:
+    from apps.production.models import Review
+    if decision not in {"approve", "reject", "revise"}:
+        raise ValueError("decision must be approve, reject or revise")
+    take = shot.takes.filter(pk=take_id).first() if take_id is not None else shot.takes.order_by("-number").first()
+    if take_id is not None and take is None:
+        raise ValueError("Ce take n'appartient pas à ce shot")
+    if decision == "approve":
+        if take is None or not take.uri:
+            raise ValueError("Impossible de verrouiller un take sans vidéo")
+        shot.takes.exclude(pk=take.pk).filter(status=ShotTake.Status.LOCKED).update(status=ShotTake.Status.REVIEW)
+        take.status = ShotTake.Status.LOCKED
+        take.save(update_fields=["status"])
+        shot.status = Beat.Status.LOCKED
+    elif decision == "reject":
+        if take is not None:
+            take.status = ShotTake.Status.REJECTED
+            take.save(update_fields=["status"])
+        shot.status = Beat.Status.REJECTED
+    else:
+        shot.status = Beat.Status.DRAFT
+    shot.save(update_fields=["status"])
+    Review.objects.create(episode=shot.beat.episode, beat=shot.beat, shot=shot, shot_take=take, decision=decision, comment=comment)
+    return shot
+
+
+def render_shot(shot: Shot) -> Shot:
+    from agents.backends import get_video
+    from apps.production.models import Asset
+    shot.status = Beat.Status.RENDERING
+    shot.save(update_fields=["status"])
+    number = (shot.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
+    take = ShotTake.objects.create(
+        shot=shot, number=number, prompt=shot.video_prompt or shot.text,
+        negative_prompt=shot.negative_prompt, status=ShotTake.Status.RENDERING,
+    )
+    backend = get_video()
+    take.backend = getattr(backend, "provider_id", "")
+    take.save(update_fields=["backend"])
+    prompt = shot.video_prompt or shot.text
+    uri = backend.render(prompt, duration_seconds=float(shot.duration_seconds), aspect_ratio=shot.beat.episode.season.project.aspect_ratio)
+    take.uri = uri
+    take.status = ShotTake.Status.REVIEW
+    take.save(update_fields=["uri", "status"])
+    Asset.objects.create(
+        project=shot.beat.episode.season.project, beat=shot.beat, shot=shot, shot_take=take,
+        kind=Asset.Kind.VIDEO, role=Asset.Role.CLIP, uri=uri, provider=take.backend,
+        meta={"prompt": prompt, "shot_index": shot.index},
+    )
+    shot.status = Beat.Status.REVIEW
+    shot.save(update_fields=["status"])
+    return shot
 
 
 def review_beat(beat: Beat, decision: str, comment: str = "", take_id: int | None = None) -> Beat:
