@@ -250,10 +250,22 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="plan-scenes")
     def plan_scenes_action(self, request, pk=None):
         episode = self.get_object()
-        script = episode.scripts.order_by("-version").first()
-        if script is None:
-            return Response({"detail": "Écris le script avant de planifier les scènes"}, status=status.HTTP_400_BAD_REQUEST)
+        project = episode.season.project
         try:
+            contract = getattr(project, "narrative_contract", None)
+            has_episode_events = bool(
+                contract and contract.events.filter(episode_number=episode.number).exists()
+            )
+            if not has_episode_events:
+                # Legacy projects created before the narrative ledger existed are
+                # repaired from the locked Bible. Re-plan first so canonical
+                # character identities cannot drift, then rewrite this script.
+                run_showrunner(project)
+                episode.refresh_from_db()
+                write_script(episode)
+            script = episode.scripts.order_by("-version").first()
+            if script is None:
+                return Response({"detail": "Écris le script avant de planifier les scènes"}, status=status.HTTP_400_BAD_REQUEST)
             plan_scenes(episode, script.fountain, persist=True)
         except (ValueError, RuntimeError) as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
