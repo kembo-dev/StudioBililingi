@@ -157,7 +157,7 @@ def resolve_ingredients(beat: Beat) -> dict:
     return {"items": picked, "uris": uris, "start_frame": start}
 
 
-def shot_render_package(shot) -> dict:
+def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     """Reuse the Beat's canonical refs/voice while applying the Shot's visual action."""
     beat = shot.beat
     readiness = validate_render_readiness(beat)
@@ -189,6 +189,15 @@ def shot_render_package(shot) -> dict:
         "REFERENCE IMAGE LOCK: character reference images are identity constraints, not inspiration. "
         "Preserve the same face, age, skin tone, hair and wardrobe visible in the supplied references."
     )
+    adjustment = str(adjustment_prompt or "").strip()
+    if adjustment:
+        lines.extend([
+            "",
+            "USER TAKE ADJUSTMENT:",
+            adjustment,
+            "Apply this adjustment only to staging, acting, framing, camera, lighting, rhythm or other non-canonical presentation details. "
+            "It must never override character identity, canonical references, location identity, story facts, exact dialogue, original dialogue language, voice continuity or locked visual style.",
+        ])
     return {
         **readiness,
         "prompt": "\n".join(lines),
