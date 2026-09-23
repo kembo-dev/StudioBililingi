@@ -9,7 +9,7 @@ from apps.accounts.models import Organization
 from apps.bible.models import Character, Location, Prop, WorldBible
 from apps.jobs.models import Job
 from apps.projects.models import NarrativeContract, NarrativeEvent, Project, Season
-from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script, Segmentation
+from apps.story.models import Beat, BeatTake, Episode, Scene, ScenePlan, Script, Segmentation, Shot
 from apps.projects.beat_normalizer import normalize_beats, speaker_label, _speaker_occurrences
 from apps.projects.character_resolver import CharacterResolver, identity_token, normalize_bible_payload
 from apps.projects.story_normalizer import bible_errors, normalize_story_bible, script_conversation_errors
@@ -1277,7 +1277,8 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
             "La passe précédente est invalide. Corrige TOUT le découpage en conservant l'histoire et les scènes. "
             "Pour chaque dialogue, fournis speaker_id avec l'id canonique exact du locuteur ET mets explicitement "
             "NOM : réplique dans dialogue. character_ids contient les personnages visibles et ne remplace jamais "
-            "speaker_id. Aucun beat ne doit dépasser 32 mots; cible 20 à 28 mots. "
+            "speaker_id. Un beat est une unité NARRATIVE: conserve ensemble une action, une intention ou un échange cohérent, "
+            "même au-delà de 24/32 mots. Ne le raccourcis jamais uniquement pour une limite vidéo; la production le divisera en shots. "
             "Erreurs détectées: " + "; ".join(errors)
         )
         try:
@@ -1358,6 +1359,34 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
 
     _validate_segmented_beats(chunks, form=project.delivery, project=project, scene_plan=scene_plan)
     return persist_beats(episode, chunks, script=script, scene_plan=stored_plan)
+
+
+def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
+    """Create filmable shots without rewriting or fragmenting the narrative Beat."""
+    if beat.shots.exists():
+        return list(beat.shots.order_by("index"))
+
+    total = max(1.0, float(beat.duration_seconds or 1))
+    shot_count = max(1, int((total + max_shot_seconds - 0.001) // max_shot_seconds))
+    seconds = total / shot_count
+    text = str(beat.text or "").strip()
+
+    # Shot planning is deliberately production-oriented. The Beat text remains
+    # canonical and intact; shots share it until a dedicated cinematographer
+    # produces more precise per-shot prompts.
+    shots = []
+    for index in range(1, shot_count + 1):
+        shots.append(Shot.objects.create(
+            beat=beat,
+            index=index,
+            text=text,
+            duration_seconds=round(seconds, 1),
+            video_prompt=beat.video_prompt or text,
+            negative_prompt=beat.negative_prompt,
+            camera=beat.camera,
+            continuity=beat.continuity,
+        ))
+    return shots
 
 
 def review_beat(beat: Beat, decision: str, comment: str = "", take_id: int | None = None) -> Beat:
