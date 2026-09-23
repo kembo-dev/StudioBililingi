@@ -34,6 +34,24 @@ class ProductionPipelineTests(TestCase):
             logline="Test",
         )
 
+    def test_project_delete_cascades_locked_scene_plan_segmentation(self):
+        from apps.story.models import ScenePlan, Segmentation
+        script = Script.objects.create(episode=self.episode, version=1, fountain="Script")
+        plan = ScenePlan.objects.create(
+            episode=self.episode, script=script, version=1, locked=True,
+            payload=[{"index": 1, "target_seconds": 8}],
+        )
+        persist_beats(
+            self.episode,
+            [{"text": "Beat narratif", "scene_index": 1, "duration_seconds": 8}],
+            script=script,
+            scene_plan=plan,
+        )
+        project_id = self.project.id
+        self.project.delete()
+        self.assertFalse(Project.objects.filter(pk=project_id).exists())
+        self.assertFalse(Segmentation.objects.filter(scene_plan_id=plan.id).exists())
+
     def test_resegmentation_preserves_script_and_previous_beats(self):
         # Segmentation versions are independent from screenplay versions:
         # re-segmenting must never manufacture a new Script.
