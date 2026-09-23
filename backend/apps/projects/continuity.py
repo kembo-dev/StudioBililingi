@@ -157,6 +157,47 @@ def resolve_ingredients(beat: Beat) -> dict:
     return {"items": picked, "uris": uris, "start_frame": start}
 
 
+def shot_render_package(shot) -> dict:
+    """Reuse the Beat's canonical refs/voice while applying the Shot's visual action."""
+    beat = shot.beat
+    readiness = validate_render_readiness(beat)
+    context = readiness["context"]
+    pack = readiness["ingredients"]
+    project = beat.episode.season.project
+
+    lines = [
+        shot.video_prompt or shot.text,
+        "",
+        continuity_prompt(beat, context),
+        "",
+        "SHOT LOCK:",
+        f"Render only this shot action: {shot.text}",
+        "Do not add, translate, paraphrase or replace spoken dialogue.",
+    ]
+    if beat.dialogue:
+        lines.extend([
+            f'CANONICAL SPOKEN DIALOGUE: "{beat.dialogue}"',
+            "LANGUAGE LOCK: speak the canonical dialogue exactly in its original language. "
+            "Do not translate it to English or to any other language.",
+        ])
+    speaker = context.get("speaker")
+    if speaker:
+        lines.append(
+            f"SPEAKER LOCK: {speaker['name']} must keep the canonical voice/accent: {speaker['voice']}."
+        )
+    lines.append(
+        "REFERENCE IMAGE LOCK: character reference images are identity constraints, not inspiration. "
+        "Preserve the same face, age, skin tone, hair and wardrobe visible in the supplied references."
+    )
+    return {
+        **readiness,
+        "prompt": "\n".join(lines),
+        "project": project,
+        "ingredients": pack,
+        "context": context,
+    }
+
+
 def validate_render_readiness(beat: Beat) -> dict:
     """Fail before spending Veo quota when canonical continuity is incomplete."""
     context = build_continuity_context(beat)
