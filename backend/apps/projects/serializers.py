@@ -15,19 +15,19 @@ class OrganizationSerializer(serializers.ModelSerializer):
 class CharacterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Character
-        fields = ("id", "key", "name", "role", "want", "need", "look", "voice", "locked")
+        fields = ("id", "key", "reference_uid", "name", "role", "want", "need", "look", "voice", "locked")
 
 
 class LocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Location
-        fields = ("id", "key", "name", "look", "time_of_day", "locked")
+        fields = ("id", "key", "reference_uid", "name", "look", "time_of_day", "locked")
 
 
 class PropSerializer(serializers.ModelSerializer):
     class Meta:
         model = Prop
-        fields = ("id", "key", "name", "look", "story_function", "locked")
+        fields = ("id", "key", "reference_uid", "name", "look", "story_function", "locked")
 
 
 class WorldBibleSerializer(serializers.ModelSerializer):
@@ -175,7 +175,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_refs(self, obj):
         roles = {"character_ref", "location_ref", "prop_ref"}
         return [
-            {"id": asset.id, "role": asset.role, "uri": asset.uri, "provider": asset.provider, "meta": asset.meta}
+            {"id": asset.id, "role": asset.role, "uri": asset.uri, "provider": asset.provider, "reference_uid": (asset.meta or {}).get("reference_uid"), "meta": asset.meta}
             for asset in obj.assets.all()
             if asset.role in roles
         ]
