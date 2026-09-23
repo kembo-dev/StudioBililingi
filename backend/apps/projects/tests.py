@@ -128,26 +128,26 @@ class ProductionPipelineTests(TestCase):
         with self.assertRaisesMessage(ValueError, "sans vidéo"):
             review_beat(beat, "approve", take_id=take.id)
 
-    def test_assembly_requires_locked_take_for_every_latest_beat(self):
+    def test_assembly_requires_locked_take_for_every_latest_shot(self):
         beats = persist_beats(self.episode, [{"text": "Un"}, {"text": "Deux"}])
-        BeatTake.objects.create(beat=beats[0], number=1, uri="file:///tmp/one.mp4", status=BeatTake.Status.LOCKED)
+        shots = [plan_beat_shots(beat)[0] for beat in beats]
+        ShotTake.objects.create(shot=shots[0], number=1, uri="file:///tmp/one.mp4", status=ShotTake.Status.LOCKED)
 
         with self.assertRaisesMessage(ValueError, "aucun take verrouillé"):
             assemble_episode(self.episode)
 
-    def test_assembly_uses_locked_takes_in_beat_order(self):
+    def test_assembly_uses_locked_shot_takes_in_story_order(self):
         beats = persist_beats(self.episode, [{"text": "Un"}, {"text": "Deux"}])
+        shots = [plan_beat_shots(beat)[0] for beat in beats]
         with TemporaryDirectory() as tmp:
-            clips = []
-            for i, beat in enumerate(beats):
+            for i, shot in enumerate(shots):
                 path = Path(tmp) / f"{i}.mp4"
                 path.write_bytes(b"fake")
-                clips.append(path)
-                BeatTake.objects.create(
-                    beat=beat,
+                ShotTake.objects.create(
+                    shot=shot,
                     number=1,
                     uri=path.as_uri(),
-                    status=BeatTake.Status.LOCKED,
+                    status=ShotTake.Status.LOCKED,
                 )
 
             media = Path(tmp) / "media"
@@ -158,7 +158,8 @@ class ProductionPipelineTests(TestCase):
             manifest = run.call_args.args[0]
             self.assertEqual(manifest[0], "ffmpeg")
             self.assertEqual(asset.role, "episode_cut")
-            self.assertEqual([row["beat_id"] for row in asset.meta["takes"]], [b.id for b in beats])
+            self.assertEqual([row["beat_id"] for row in asset.meta["shots"]], [b.id for b in beats])
+            self.assertEqual([row["shot_id"] for row in asset.meta["shots"]], [s.id for s in shots])
 
     def test_showrunner_episode_compact_fields_are_bounded(self):
         episodes = persist_episodes(self.project, [{
