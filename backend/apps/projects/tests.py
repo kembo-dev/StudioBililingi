@@ -11,8 +11,8 @@ from apps.projects.models import NarrativeContract, Project, Season
 from apps.projects.character_resolver import CharacterResolver
 from apps.projects.beat_normalizer import normalize_beats
 from apps.projects.continuity import build_continuity_context, continuity_prompt, validate_render_readiness
-from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat, plan_beat_shots
-from apps.story.models import Beat, BeatTake, Episode, Scene, Script
+from apps.projects.services import _canonical_speaker_from_dialogue, _ensure_script_speakers, _script_speaker_labels, cleanup_generated_script_characters, _segmentation_errors, _usable_bible, persist_beats, persist_bible, persist_episodes, review_beat, plan_beat_shots, review_shot
+from apps.story.models import Beat, BeatTake, Episode, Scene, Script, ShotTake
 from apps.bible.models import Character, Location, Prop
 
 
@@ -93,6 +93,17 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(beat.continuity["wardrobe"], "chemise blanche")
         self.assertEqual(beat.emotion, "tension")
         self.assertEqual(beat.dialogue, "Allo ?")
+
+    def test_shot_review_locks_exact_take(self):
+        beat = persist_beats(self.episode, [{"text": "Beat narratif", "duration_seconds": 12}])[0]
+        shot = plan_beat_shots(beat)[0]
+        first = ShotTake.objects.create(shot=shot, number=1, uri="file:///tmp/shot-one.mp4", status=ShotTake.Status.REVIEW)
+        second = ShotTake.objects.create(shot=shot, number=2, uri="file:///tmp/shot-two.mp4", status=ShotTake.Status.REVIEW)
+        review_shot(shot, "approve", take_id=second.id)
+        first.refresh_from_db(); second.refresh_from_db(); shot.refresh_from_db()
+        self.assertEqual(second.status, ShotTake.Status.LOCKED)
+        self.assertEqual(first.status, ShotTake.Status.REVIEW)
+        self.assertEqual(shot.status, Beat.Status.LOCKED)
 
     def test_review_locks_exact_take_and_unlocks_previous(self):
         beat = persist_beats(self.episode, [{"text": "Beat"}])[0]
