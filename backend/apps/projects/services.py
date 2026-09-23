@@ -513,11 +513,13 @@ def run_showrunner(project: Project) -> dict:
         from agents.roles.showrunner import Showrunner
         contract = narrative_contract_payload(project)
         project_constraints = project_constraints_payload(project)
+        bible = project.bibles.first()
         raw = Showrunner().plan(
             project.concept
             + "\n\nCONTRAINTES PROJET VERROUILLEES:\n" + str(project_constraints)
             + ("\n\nNARRATIVE CONTRACT VERROUILLE:\n" + str(contract) if contract else ""),
             delivery=project.delivery,
+            bible=bible.payload if bible else None,
         )
     except Exception as exc:
         raw = {"_error": str(exc)}
@@ -535,24 +537,43 @@ def run_showrunner(project: Project) -> dict:
     try:
         contract = project.narrative_contract
     except NarrativeContract.DoesNotExist:
-        contract = None
-    if contract:
-        planned = []
-        position = 1
-        for row in rows:
-            for description in row.get("events") or []:
-                planned.append(NarrativeEvent(
-                    contract=contract,
-                    key=f"EV{position:02d}",
-                    position=position,
-                    description=description,
-                    episode_number=row["number"],
-                    status=NarrativeEvent.Status.PLANNED,
-                ))
-                position += 1
-        if planned:
-            contract.events.all().delete()
-            NarrativeEvent.objects.bulk_create(planned)
+        contract = NarrativeContract.objects.create(
+            project=project,
+            point_of_view=(
+                NarrativeContract.PointOfView.DIALOGUE
+                if project.delivery in {"conversation", "rencontre"}
+                else NarrativeContract.PointOfView.THIRD_PERSON
+            ),
+            narrator="none" if project.delivery in {"conversation", "rencontre"} else "external",
+            tense="present",
+            story_type="",
+            recommended_episode_count=project.episode_count_target or len(rows) or 1,
+            rules={
+                "no_repetition": True,
+                "no_moral_filler": True,
+                "one_new_story_information_per_beat": True,
+                "scene_changes_on_location_or_time": True,
+            },
+            locked=True,
+        )
+    planned = []
+    position = 1
+    for row in rows:
+        for description in row.get("events") or []:
+            planned.append(NarrativeEvent(
+                contract=contract,
+                key=f"EV{position:02d}",
+                position=position,
+                description=description,
+                episode_number=row["number"],
+                status=NarrativeEvent.Status.PLANNED,
+            ))
+            position += 1
+    if planned:
+        if contract.events.filter(beats__isnull=False).exists():
+            raise RuntimeError("Le Narrative Contract est déjà consommé par des beats; refuse de réécrire le ledger.")
+        contract.events.all().delete()
+        NarrativeEvent.objects.bulk_create(planned)
     # The ledger is now assigned to concrete episodes and becomes the canonical
     # event contract consumed by screenwriting and segmentation.
     return {"agent": raw, "episodes": [e.id for e in episodes]}
