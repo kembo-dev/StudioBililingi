@@ -157,9 +157,30 @@ def resolve_ingredients(beat: Beat, *, reference_uids: list[str] | None = None) 
         by_uid = {str(item.get("reference_uid")): item for item in picked}
         picked = [by_uid[uid] for uid in requested_uids if uid in by_uid]
 
-    uris = [item["uri"] for item in picked if item.get("uri")]
-    start = next((item["uri"] for item in picked if item["role"] == Asset.Role.LOCATION_REF), None)
-    return {"items": picked, "uris": uris, "start_frame": start}
+    # Veo can consume only a small number of asset refs. Preserve every
+    # canonical binding in items/reference_uids, while ordering the actual media
+    # payload by identity importance: speaker, other characters, location, props.
+    speaker_key = beat.speaker.key if beat.speaker_id else None
+    role_priority = {
+        Asset.Role.CHARACTER_REF: 1,
+        Asset.Role.LOCATION_REF: 2,
+        Asset.Role.PROP_REF: 3,
+    }
+    media_items = sorted(
+        [item for item in picked if item.get("uri")],
+        key=lambda item: (
+            0 if speaker_key and item.get("key") == speaker_key else role_priority.get(item.get("role"), 9),
+            str(item.get("reference_uid") or ""),
+        ),
+    )
+    uris = [item["uri"] for item in media_items]
+    start = next((item["uri"] for item in media_items if item["role"] == Asset.Role.LOCATION_REF), None)
+    return {
+        "items": picked,
+        "media_items": media_items,
+        "uris": uris,
+        "start_frame": start,
+    }
 
 
 def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
