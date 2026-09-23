@@ -1,4 +1,9 @@
 from django.db import models
+import secrets
+
+
+def new_reference_uid():
+    return secrets.token_hex(8)  # 16 stable characters
 
 from apps.projects.models import Project
 
@@ -16,6 +21,7 @@ class WorldBible(models.Model):
 
 
 class Character(models.Model):
+    reference_uid = models.CharField(max_length=32, unique=True, editable=False, default=new_reference_uid)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="characters")
     bible = models.ForeignKey(
         WorldBible, on_delete=models.SET_NULL, null=True, blank=True, related_name="characters"
@@ -34,6 +40,7 @@ class Character(models.Model):
 
 
 class Location(models.Model):
+    reference_uid = models.CharField(max_length=32, unique=True, editable=False, default=new_reference_uid)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="locations")
     bible = models.ForeignKey(
         WorldBible, on_delete=models.SET_NULL, null=True, blank=True, related_name="locations"
@@ -49,6 +56,7 @@ class Location(models.Model):
 
 
 class Prop(models.Model):
+    reference_uid = models.CharField(max_length=32, unique=True, editable=False, default=new_reference_uid)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="props")
     bible = models.ForeignKey(
         WorldBible, on_delete=models.SET_NULL, null=True, blank=True, related_name="props"
