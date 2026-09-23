@@ -87,8 +87,21 @@ class ProductionPipelineTests(TestCase):
         shots = plan_beat_shots(beat, max_shot_seconds=8)
         self.assertEqual(len(shots), 3)
         self.assertEqual(beat.text, shots[0].text)
+        self.assertEqual([float(shot.duration_seconds) for shot in shots], [8.0, 6.0, 4.0])
         self.assertAlmostEqual(sum(float(shot.duration_seconds) for shot in shots), 18.0, places=1)
-        self.assertTrue(all(float(shot.duration_seconds) <= 8 for shot in shots))
+        self.assertTrue(all(float(shot.duration_seconds) in {4.0, 6.0, 8.0} for shot in shots))
+        self.assertTrue(all(shot.text == beat.text for shot in shots))
+
+    def test_shot_planning_rounds_up_unrepresentable_duration_without_content_loss(self):
+        beat = persist_beats(self.episode, [{
+            "text": "Le dialogue et l'action restent complets meme si la duree narrative est impaire.",
+            "scene_index": 1,
+            "duration_seconds": 7,
+        }])[0]
+        shots = plan_beat_shots(beat)
+        self.assertEqual([float(shot.duration_seconds) for shot in shots], [8.0])
+        self.assertEqual(shots[0].text, beat.text)
+        self.assertEqual(shots[0].continuity["narrative_beat_seconds"], 7.0)
 
     def test_structured_segmentation_metadata_is_persisted(self):
         beat = persist_beats(self.episode, [{
