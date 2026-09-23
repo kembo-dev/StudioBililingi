@@ -505,6 +505,40 @@ class ProductionPipelineTests(TestCase):
         self.assertTrue(rows[1]["dialogue"].startswith("CHLOÉ"))
         self.assertTrue(rows[1]["speaker_inherited"])
 
+    def test_shot_package_freezes_reference_uids_and_reuses_them_for_adjustment(self):
+        from apps.projects.continuity import shot_render_package
+        from apps.production.models import Asset
+        from apps.story.models import Shot, ShotTake
+
+        persist_bible(self.project, {
+            "characters": [{"id": "chloe", "name": "Chloé", "look": "visage canonique"}],
+            "locations": [{"id": "cuisine", "name": "Cuisine", "look": "cuisine canonique"}],
+            "props": [],
+        })
+        character = self.project.characters.get(key="chloe")
+        location = self.project.locations.get(key="cuisine")
+        Asset.objects.create(project=self.project, kind=Asset.Kind.IMAGE, role=Asset.Role.CHARACTER_REF, uri="/tmp/chloe.png", meta={"key": "chloe"})
+        Asset.objects.create(project=self.project, kind=Asset.Kind.IMAGE, role=Asset.Role.LOCATION_REF, uri="/tmp/cuisine.png", meta={"key": "cuisine"})
+        beat = persist_beats(self.episode, [{
+            "text": "Chloé parle dans la cuisine.",
+            "dialogue": "CHLOÉ : Bonjour.",
+            "speaker_id": "chloe",
+            "character_ids": ["chloe"],
+            "location_id": "cuisine",
+            "scene_index": 1,
+            "video_prompt": "Plan rapproché de Chloé.",
+        }])[0]
+        shot = Shot.objects.create(beat=beat, index=1, text=beat.text, duration_seconds=6, video_prompt=beat.video_prompt)
+        first = shot_render_package(shot)
+        shot.refresh_from_db()
+        self.assertEqual(shot.reference_uids, [character.reference_uid, location.reference_uid])
+        ShotTake.objects.create(shot=shot, number=1, uri="/tmp/take1.mp4", status=ShotTake.Status.REVIEW)
+        adjusted = shot_render_package(shot, adjustment_prompt="Cadre plus serré")
+        self.assertEqual([item["reference_uid"] for item in adjusted["ingredients"]["items"]], shot.reference_uids)
+        self.assertEqual(adjusted["previous_take"]["number"], 1)
+        self.assertIn("LANGUAGE LOCK", adjusted["prompt"])
+        self.assertIn("PREVIOUS TAKE CONTINUITY", adjusted["prompt"])
+
     def test_render_readiness_blocks_missing_visual_refs(self):
         persist_bible(self.project, {
             "characters": [{"id": "chloe", "name": "Chloé", "look": "pyjama confortable"}],
