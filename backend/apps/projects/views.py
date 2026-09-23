@@ -330,6 +330,14 @@ class ShotViewSet(viewsets.ReadOnlyModelViewSet):
         from apps.jobs.models import Job
         from apps.jobs.queue import enqueue, is_eager
         shot = self.get_object()
+        active = Job.objects.filter(
+            project=shot.beat.episode.season.project,
+            kind=Job.Kind.VIDEO,
+            status__in=[Job.Status.QUEUED, Job.Status.RUNNING],
+            payload__shot_id=shot.id,
+        ).order_by("-created_at").first()
+        if active is not None:
+            return Response({"job_id": active.id, "status": active.status, "result": active.result})
         job = enqueue(project=shot.beat.episode.season.project, kind=Job.Kind.VIDEO, agent_role="cinematographer", payload={"shot_id": shot.id})
         if is_eager() and job.status == Job.Status.FAILED:
             return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
