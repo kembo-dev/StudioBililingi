@@ -27,7 +27,7 @@ export default function ProjectsPage() {
   const [subgenre, setSubgenre] = useState("");
   const [setting, setSetting] = useState("Kinshasa, RDC");
   const [episodeCount, setEpisodeCount] = useState("auto");
-  const [episodeDuration, setEpisodeDuration] = useState("60");
+  const [episodeDuration, setEpisodeDuration] = useState("auto");
   const [tone, setTone] = useState("");
   const [endingIntent, setEndingIntent] = useState("");
 
@@ -46,7 +46,7 @@ export default function ProjectsPage() {
     try {
       const project = await api<Project>("/api/projects/", {
         method: "POST",
-        body: JSON.stringify({ title, concept, genre, subgenre, setting, tone, ending_intent: endingIntent, episode_count_target: episodeCount === "auto" ? null : Number(episodeCount), episode_duration_seconds: Number(episodeDuration), delivery, visual_style: visualStyle }),
+        body: JSON.stringify({ title, concept, genre, subgenre, setting, tone, ending_intent: endingIntent, episode_count_target: episodeCount === "auto" ? null : Number(episodeCount), episode_duration_seconds: episodeDuration === "auto" ? null : Number(episodeDuration), delivery, visual_style: visualStyle }),
       });
       window.location.href = `/projects/${project.id}`;
     } catch (err) {
@@ -133,6 +133,7 @@ export default function ProjectsPage() {
           </label>
           <label className="block text-xs text-[#9aa3b2]">Durée cible / épisode
             <select value={episodeDuration} onChange={(e) => setEpisodeDuration(e.target.value)} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white">
+              <option value="auto">Automatique · durée naturelle de chaque épisode</option>
               <option value="30">30 secondes</option><option value="45">45 secondes</option><option value="60">60 secondes</option><option value="90">90 secondes</option><option value="120">2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option>
             </select>
           </label>
