@@ -152,6 +152,7 @@ class Shot(models.Model):
     negative_prompt = models.TextField(blank=True)
     camera = models.JSONField(default=dict)
     continuity = models.JSONField(default=dict)
+    reference_uids = models.JSONField(default=list, help_text="Ordered canonical media UIDs required by this shot.")
     status = models.CharField(max_length=24, choices=Beat.Status.choices, default=Beat.Status.DRAFT)
     created_at = models.DateTimeField(auto_now_add=True)
 
