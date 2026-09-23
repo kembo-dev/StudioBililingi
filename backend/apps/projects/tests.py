@@ -539,6 +539,44 @@ class ProductionPipelineTests(TestCase):
         self.assertIn("LANGUAGE LOCK", adjusted["prompt"])
         self.assertIn("PREVIOUS TAKE CONTINUITY", adjusted["prompt"])
 
+    def test_video_media_refs_prioritize_speaker_then_characters_then_location(self):
+        from apps.projects.continuity import resolve_ingredients
+        from apps.production.models import Asset
+
+        persist_bible(self.project, {
+            "characters": [
+                {"id": "alice", "name": "Alice", "look": "look Alice"},
+                {"id": "bob", "name": "Bob", "look": "look Bob"},
+            ],
+            "locations": [{"id": "salon", "name": "Salon", "look": "salon canonique"}],
+            "props": [{"id": "telephone", "name": "Téléphone", "look": "téléphone noir"}],
+        })
+        for role, key in [
+            (Asset.Role.CHARACTER_REF, "alice"),
+            (Asset.Role.CHARACTER_REF, "bob"),
+            (Asset.Role.LOCATION_REF, "salon"),
+            (Asset.Role.PROP_REF, "telephone"),
+        ]:
+            Asset.objects.create(project=self.project, kind=Asset.Kind.IMAGE, role=role, uri=f"/tmp/{key}.png", meta={"key": key})
+        beat = persist_beats(self.episode, [{
+            "text": "Bob parle à Alice dans le salon.",
+            "dialogue": "BOB : Bonjour Alice.",
+            "speaker_id": "bob",
+            "character_ids": ["alice", "bob"],
+            "location_id": "salon",
+            "prop_ids": ["telephone"],
+            "scene_index": 1,
+            "video_prompt": "Bob parle à Alice.",
+        }])[0]
+
+        pack = resolve_ingredients(beat)
+        self.assertEqual(
+            [item["key"] for item in pack["media_items"]],
+            ["bob", "alice", "salon", "telephone"],
+        )
+        self.assertEqual(pack["uris"][:3], ["/tmp/bob.png", "/tmp/alice.png", "/tmp/salon.png"])
+        self.assertEqual(len(pack["items"]), 4)
+
     def test_render_readiness_blocks_missing_visual_refs(self):
         persist_bible(self.project, {
             "characters": [{"id": "chloe", "name": "Chloé", "look": "pyjama confortable"}],
