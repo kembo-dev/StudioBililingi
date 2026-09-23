@@ -69,6 +69,7 @@ export default function ProjectPage() {
   const [promptRef, setPromptRef] = useState<Ref | null>(null);
   const [refPrompt, setRefPrompt] = useState("");
   const [shotJobs, setShotJobs] = useState<Record<number, Job>>({});
+  const [shotAdjustments, setShotAdjustments] = useState<Record<number, string>>({});
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
@@ -118,7 +119,7 @@ export default function ProjectPage() {
     try {
       const response = await api<{ job_id: number; status: Job["status"] }>(`/api/shots/${shotId}/render/`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ prompt: shotAdjustments[shotId] ?? "" }),
       });
       let job = await api<Job>(`/api/jobs/${response.job_id}/`);
       setShotJobs((current) => ({ ...current, [shotId]: job }));
@@ -415,6 +416,16 @@ export default function ProjectPage() {
                             {shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running" ? <div className="mt-2 rounded border border-[#e8c36a]/30 bg-[#e8c36a]/5 px-3 py-2 text-xs text-[#e8c36a]"><p>{shotJobs[shot.id]?.status === "queued" ? "Take en file d’attente. Tu peux continuer à travailler, cette zone se met à jour automatiquement." : "Veo génère le clip. La vidéo apparaîtra ici automatiquement dès qu’elle sera prête."}</p><div className="mt-2 h-1 overflow-hidden rounded bg-[#2a2e38]"><div className="h-full w-1/2 animate-pulse rounded bg-[#e8c36a]" /></div></div> : null}
                             {shotJobs[shot.id]?.status === "succeeded" ? <p className="mt-2 text-xs text-green-400">✓ Take généré. La vidéo est prête à être visionnée et verrouillée.</p> : null}
                             <p className="mt-2 text-xs text-[#9aa3b2]">{shot.video_prompt || shot.text}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <input
+                                maxLength={4000}
+                                value={shotAdjustments[shot.id] ?? ""}
+                                onChange={(e) => setShotAdjustments((current) => ({ ...current, [shot.id]: e.target.value }))}
+                                placeholder="Réajuster le prochain take… ex. caméra plus proche, jeu plus retenu, lumière plus chaude"
+                                className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#0b0c10] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]"
+                              />
+                              <span className="self-center text-[10px] text-[#6f7785]">Identité, refs, langue et dialogue restent verrouillés.</span>
+                            </div>
                             {shot.clip_uri ? <video controls className="mt-2 max-h-64 w-full rounded bg-black" src={mediaUrl(shot.clip_uri)} /> : null}
                             {shot.takes?.length ? <div className="mt-2 flex flex-wrap gap-2">{shot.takes.map((take) => (
                               <div key={take.id} className="flex items-center gap-2 rounded border border-[#2a2e38] px-2 py-1 text-xs">
