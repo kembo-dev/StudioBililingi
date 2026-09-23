@@ -638,6 +638,23 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(beats[0].script_id, script.id)
         self.assertIsNotNone(beats[0].segmentation_id)
 
+    def test_auto_duration_constraints_expose_null_target(self):
+        from apps.projects.services import project_constraints_payload
+        self.project.episode_duration_seconds = None
+        self.project.save(update_fields=["episode_duration_seconds"])
+        self.assertIsNone(project_constraints_payload(self.project)["episode_duration_seconds"])
+
+    def test_fixed_duration_budget_is_stricter_per_episode(self):
+        from apps.projects.services import _duration_budget_errors
+        scene_plan = [{"index": 1, "target_seconds": 60}]
+        chunks = [{"scene_index": 1, "duration_seconds": 71}]
+        self.assertTrue(_duration_budget_errors(chunks, scene_plan, fixed_episode_target=60))
+        self.assertFalse(_duration_budget_errors(
+            [{"scene_index": 1, "duration_seconds": 65}],
+            scene_plan,
+            fixed_episode_target=60,
+        ))
+
     def test_duration_budget_rejects_scene_far_over_target(self):
         from apps.projects.services import _duration_budget_errors
         errors = _duration_budget_errors(
