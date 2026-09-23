@@ -338,7 +338,15 @@ class ShotViewSet(viewsets.ReadOnlyModelViewSet):
         ).order_by("-created_at").first()
         if active is not None:
             return Response({"job_id": active.id, "status": active.status, "result": active.result})
-        job = enqueue(project=shot.beat.episode.season.project, kind=Job.Kind.VIDEO, agent_role="cinematographer", payload={"shot_id": shot.id})
+        adjustment_prompt = str(request.data.get("prompt") or request.data.get("adjustment_prompt") or "").strip()
+        if len(adjustment_prompt) > 4000:
+            return Response({"detail": "Le prompt de réajustement est limité à 4000 caractères"}, status=status.HTTP_400_BAD_REQUEST)
+        job = enqueue(
+            project=shot.beat.episode.season.project,
+            kind=Job.Kind.VIDEO,
+            agent_role="cinematographer",
+            payload={"shot_id": shot.id, "adjustment_prompt": adjustment_prompt},
+        )
         if is_eager() and job.status == Job.Status.FAILED:
             return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"job_id": job.id, "status": job.status, "result": job.result})
