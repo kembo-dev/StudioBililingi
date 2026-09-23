@@ -65,8 +65,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
         project = create_project(**ser.validated_data)
         try:
-            run_showrunner(project)
+            # The Bible establishes canonical identities first. The Showrunner
+            # must plan episodes from those exact names/locations, never invent
+            # a parallel cast before the Bible exists.
             run_bible(project)
+            run_showrunner(project)
         except RuntimeError as exc:
             message = str(exc)
             code = status.HTTP_429_TOO_MANY_REQUESTS if "429" in message and "RESOURCE_EXHAUSTED" in message else status.HTTP_400_BAD_REQUEST
