@@ -7,8 +7,9 @@ import { useEffect, useState } from "react";
 import { api, mediaUrl } from "@/lib/api";
 
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
-type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
-type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; status: string; clip_uri?: string | null; takes: ShotTake[] };
+type GenerationIngredient = { role?: string; key?: string; reference_uid?: string; uri?: string; name?: string };
+type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string } };
+type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; reference_uids?: string[]; status: string; clip_uri?: string | null; takes: ShotTake[] };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
   id: number;
@@ -433,6 +434,25 @@ export default function ProjectPage() {
                                 {take.uri && take.status !== "locked" ? <button onClick={() => run(`lock-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "approve", take_id: take.id })} className="text-[#e8c36a]">Verrouiller</button> : null}
                                 {take.status === "locked" ? <span className="text-green-400">✓ choisi</span> : null}
                                 {take.uri && take.status !== "locked" ? <button onClick={() => run(`reject-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "reject", take_id: take.id })} className="text-red-300">Rejeter</button> : null}
+                                {take.generation_meta?.ingredients?.length ? (
+                                  <details className="w-full basis-full border-t border-[#2a2e38] pt-2">
+                                    <summary className="cursor-pointer text-[10px] uppercase tracking-[0.12em] text-[#e8c36a]">Références Veo · {take.generation_meta.ingredients.length}</summary>
+                                    <div className="mt-2 space-y-1">
+                                      {take.generation_meta.ingredients.map((item, refIndex) => (
+                                        <div key={item.reference_uid ?? `${item.key}-${refIndex}`} className="flex flex-wrap items-center gap-2 rounded bg-[#0b0c10] px-2 py-1 text-[10px]">
+                                          <span className="text-[#e8c36a]">#{refIndex + 1}</span>
+                                          <span>{item.role?.replaceAll("_", " ")}</span>
+                                          <span className="font-medium">{item.name ?? item.key ?? "ref"}</span>
+                                          {item.reference_uid ? <code className="text-[#9aa3b2]">UID {item.reference_uid}</code> : null}
+                                          {refIndex < 3 ? <span className="text-green-400">envoyée à Veo</span> : <span className="text-[#6f7785]">verrou logique</span>}
+                                        </div>
+                                      ))}
+                                      {take.generation_meta.previous_take?.number ? <p className="text-[10px] text-[#9aa3b2]">Baseline · Take {take.generation_meta.previous_take.number}</p> : null}
+                                      {take.generation_meta.language_locked ? <p className="text-[10px] text-green-400">✓ Langue/dialogue verrouillés · {take.generation_meta.dialogue_language_policy ?? "langue originale"}</p> : null}
+                                      {take.generation_meta.adjustment_prompt ? <p className="text-[10px] text-[#9aa3b2]">Réajustement · {take.generation_meta.adjustment_prompt}</p> : null}
+                                    </div>
+                                  </details>
+                                ) : null}
                               </div>
                             ))}</div> : <p className="mt-2 text-[11px] text-[#6f7785]">Aucun take généré pour ce shot.</p>}
                           </div>
