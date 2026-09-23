@@ -218,7 +218,11 @@ class GoogleVideoBackend:
         end_image = _video_reference_image(types, end_frame) if _usable(end_frame) else None
 
         config_kwargs = {"aspect_ratio": aspect_ratio, "number_of_videos": 1}
-        requested_duration = max(4, min(8, int(round(float(duration_seconds or 8)))))
+        raw_duration = max(4.0, min(8.0, float(duration_seconds or 8)))
+        # Veo text-to-video accepts discrete clip lengths, not arbitrary seconds.
+        # Choose the nearest supported duration and prefer the longer option on ties.
+        supported_durations = (4, 6, 8)
+        requested_duration = min(supported_durations, key=lambda value: (abs(value - raw_duration), -value))
         config_kwargs["duration_seconds"] = requested_duration
 
         # Veo reference-images mode cannot be mixed with image/last-frame mode.
