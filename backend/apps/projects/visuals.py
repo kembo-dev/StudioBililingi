@@ -46,7 +46,7 @@ def generate_refs(project: Project) -> list:
         save(
             Asset.Role.CHARACTER_REF,
             artist.character_ref(name=char.name, look=char.look, role=char.role, project_key=project_key, visual_style=project.visual_style),
-            {"key": char.key, "name": char.name, "entity": "character", "visual_style": project.visual_style},
+            {"key": char.key, "reference_uid": char.reference_uid, "name": char.name, "entity": "character", "visual_style": project.visual_style},
         )
     for loc in project.locations.all():
         if existing(Asset.Role.LOCATION_REF, loc.key):
@@ -54,7 +54,7 @@ def generate_refs(project: Project) -> list:
         save(
             Asset.Role.LOCATION_REF,
             artist.location_ref(name=loc.name, look=loc.look, time_of_day=loc.time_of_day, project_key=project_key, visual_style=project.visual_style),
-            {"key": loc.key, "name": loc.name, "entity": "location", "visual_style": project.visual_style},
+            {"key": loc.key, "reference_uid": loc.reference_uid, "name": loc.name, "entity": "location", "visual_style": project.visual_style},
         )
     for prop in project.props.all():
         if existing(Asset.Role.PROP_REF, prop.key):
@@ -62,7 +62,7 @@ def generate_refs(project: Project) -> list:
         save(
             Asset.Role.PROP_REF,
             artist.prop_ref(name=prop.name, look=prop.look, project_key=project_key, visual_style=project.visual_style),
-            {"key": prop.key, "name": prop.name, "entity": "prop", "visual_style": project.visual_style},
+            {"key": prop.key, "reference_uid": prop.reference_uid, "name": prop.name, "entity": "prop", "visual_style": project.visual_style},
         )
     return created
 
@@ -121,6 +121,7 @@ def regenerate_visual_ref(project: Project, entity_type: str, entity_key: str, c
             provider=getattr(artist.image, "provider_id", ""),
             meta={
                 "key": entity.key,
+                "reference_uid": entity.reference_uid,
                 "name": entity.name,
                 "entity": entity_type,
                 "visual_style": project.visual_style,
