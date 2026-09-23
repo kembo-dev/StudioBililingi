@@ -1328,7 +1328,10 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     )
     if final_errors:
         feedback = (
-            "Corrige la segmentation sans changer le script ni le Scene Plan. Supprime/fusionne les répétitions, "
+            "Corrige la segmentation sans changer le script ni le Scene Plan. Le SCENE PLAN est une frontière stricte: "
+            "pour chaque beat, conserve un scene_index existant et utilise UNIQUEMENT un event_id présent dans event_ids "
+            "de cette même scène. Ne déplace jamais un EVxx vers une autre scène pour corriger la durée. "
+            "Supprime/fusionne les répétitions uniquement à l'intérieur d'une scène compatible, "
             "et ajuste duration_seconds afin que la somme des beats de chaque scène respecte target_seconds. "
             + (
                 f"La durée {project.episode_duration_seconds}s est imposée PAR ÉPISODE: compresse réellement actions et dialogues sans supprimer les EVxx. "
