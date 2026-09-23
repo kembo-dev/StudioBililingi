@@ -4,7 +4,7 @@ from agents.backends import get_text
 
 
 class BeatSegmenter:
-    """Turns a script into visually renderable 6-8 second beats."""
+    """Turns a script into narrative beats constrained by the locked Scene Plan."""
 
     role = "beat_segmenter"
     target_words = 24
@@ -32,17 +32,17 @@ class BeatSegmenter:
         return self.text.generate_json(
             system=(
                 "Tu es le segmenter vidéo de StudioBililingi. Ne découpe PAS mécaniquement tous les 24 mots. "
-                "Un beat est une unité visuelle cohérente de 6 à 8 secondes avec une seule intention dramatique. "
+                "Un beat est une unité NARRATIVE cohérente avec une seule intention dramatique; ce n'est pas un clip vidéo. "
                 "Ne crée jamais un clip autonome pour une micro-réplique ou réaction comme Non, Allô, Oui, un nom "
                 "ou une phrase de quelques mots: fusionne-la avec l'action, la réaction ou la réplique adjacente dans "
-                "la même scène. La cible de production est 24 mots par beat. Pour chaque beat, vise une longueur narrative naturelle; "
-                "ne dépasse jamais 32 mots. Si le contenu dépasse 32 mots, crée plusieurs beats en conservant le même "
-                "scene_index et la continuité, mais jamais en coupant une phrase existante au milieu. "
-                "Un beat de moins de 12 mots doit être fusionné avec un voisin compatible, "
-                "sauf silence/action visuelle qui remplit réellement 6 à 8 secondes. Une longue réplique doit être "
+                "la même scène. La longueur en mots est seulement informative: conserve ensemble une action, une intention "
+                "ou un échange cohérent, même au-delà de 24/32 mots. Ne découpe jamais un beat uniquement pour satisfaire "
+                "une limite vidéo: les SHOTS seront créés ensuite comme unités filmables. Une longue réplique doit être "
                 "découpée à une pause naturelle avec une "
                 "action ou réaction visible pour chaque partie. Respecte les changements de scène, de lieu, de locuteur "
-                "et d'action. Retourne JSON {\"beats\": [...]} uniquement. Chaque beat doit fournir: "
+                "et d'action. Avant de répondre, parcours chaque scène du SCENE PLAN et construis ses beats uniquement "
+                "avec les event_ids autorisés pour CETTE scène; ne déplace jamais un EVxx vers une autre scène pendant une correction. "
+                "Retourne JSON {\"beats\": [...]} uniquement. Chaque beat doit fournir: "
                 "text, event_id, scene_index, scene_heading, scene_summary, location_id, time_of_day, lighting, "
                 "character_ids, speaker_id, prop_ids, camera {shot_size, angle, move, lens}, emotion, dialogue, "
                 "continuity, duration_seconds, video_prompt, negative_prompt, backend. "
