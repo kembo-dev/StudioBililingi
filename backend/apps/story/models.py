@@ -57,7 +57,7 @@ class ScenePlan(models.Model):
 class Segmentation(models.Model):
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="segmentations")
     script = models.ForeignKey(Script, on_delete=models.CASCADE, related_name="segmentations")
-    scene_plan = models.ForeignKey(ScenePlan, on_delete=models.PROTECT, related_name="segmentations")
+    scene_plan = models.ForeignKey(ScenePlan, on_delete=models.CASCADE, related_name="segmentations")
     version = models.PositiveIntegerField(default=1)
     payload = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
