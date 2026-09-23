@@ -1400,33 +1400,56 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
     return persist_beats(episode, chunks, script=script, scene_plan=stored_plan)
 
 
+def _veo_shot_durations(total_seconds: float) -> list[int]:
+    """Return the closest lossless production timeline using Veo 4/6/8s clips."""
+    total = max(0.1, float(total_seconds or 0))
+    target = int(total) if total.is_integer() else int(total) + 1
+    if target < 4:
+        return [4]
+    if target % 2:
+        target += 1
+
+    durations = []
+    remaining = target
+    while remaining:
+        if remaining >= 8 and remaining - 8 != 2:
+            durations.append(8)
+            remaining -= 8
+        elif remaining >= 6 and remaining - 6 != 2:
+            durations.append(6)
+            remaining -= 6
+        else:
+            durations.append(4)
+            remaining -= 4
+    return durations
+
+
 def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
-    """Create filmable shots without rewriting or fragmenting the narrative Beat."""
+    """Create Veo-ready shots while preserving the complete narrative Beat."""
     if beat.shots.exists():
         return list(beat.shots.order_by("index"))
 
-    total = max(1.0, float(beat.duration_seconds or 1))
-    shot_count = max(1, int((total + max_shot_seconds - 0.001) // max_shot_seconds))
-    seconds = total / shot_count
     text = str(beat.text or "").strip()
-
-    # Shot planning is deliberately production-oriented. The Beat text remains
-    # canonical and intact; shots share it until a dedicated cinematographer
-    # produces more precise per-shot prompts.
+    durations = _veo_shot_durations(float(beat.duration_seconds or 1))
     shots = []
-    for index in range(1, shot_count + 1):
+    for index, seconds in enumerate(durations, start=1):
         shots.append(Shot.objects.create(
             beat=beat,
             index=index,
             text=text,
-            duration_seconds=round(seconds, 1),
+            duration_seconds=seconds,
             video_prompt=beat.video_prompt or text,
             negative_prompt=beat.negative_prompt,
             camera=beat.camera,
-            continuity=beat.continuity,
+            continuity={
+                **(beat.continuity or {}),
+                "narrative_beat_seconds": float(beat.duration_seconds or 0),
+                "production_shot_seconds": seconds,
+                "shot_part": index,
+                "shot_parts": len(durations),
+            },
         ))
     return shots
-
 
 def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | None = None) -> Shot:
     from apps.production.models import Review
