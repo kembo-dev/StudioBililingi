@@ -587,6 +587,31 @@ class ProductionPipelineTests(TestCase):
         self.assertFalse(first.locked)
 
 
+    @patch("agents.roles.showrunner.Showrunner.plan")
+    def test_showrunner_creates_missing_narrative_contract_and_episode_events(self, mock_plan):
+        from apps.projects.services import run_showrunner
+
+        mock_plan.return_value = {
+            "tone": "intime",
+            "episodes": [{
+                "number": 1,
+                "title": "Le cafe de minuit",
+                "logline": "Deux colocataires parlent dans la cuisine.",
+                "function_in_arc": "resolution",
+                "events": ["Mani doute de son avenir.", "Nathalie lui offre une boisson chaude."],
+            }],
+            "checkpoints": [],
+        }
+        self.assertFalse(NarrativeContract.objects.filter(project=self.project).exists())
+        run_showrunner(self.project)
+        contract = NarrativeContract.objects.get(project=self.project)
+        self.assertTrue(contract.locked)
+        self.assertEqual(
+            list(contract.events.values_list("key", "episode_number")),
+            [("EV01", 1), ("EV02", 1)],
+        )
+
+
     def test_persist_beats_rolls_back_entire_segmentation_on_failure(self):
         before_scripts = Script.objects.filter(episode=self.episode).count()
         before_beats = Beat.objects.filter(episode=self.episode).count()
