@@ -258,3 +258,72 @@ def delete_visual_ref(project: Project, asset_id: int) -> None:
             candidate.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def generate_beat_scene_frame(beat, custom_prompt: str = ""):
+    """Generate a new master scene frame for one beat from canonical story entities."""
+    custom_prompt = str(custom_prompt or "").strip()
+    if len(custom_prompt) > 4000:
+        raise ValueError("Le prompt complémentaire est limité à 4000 caractères")
+    project = beat.episode.season.project
+    bible = project.bibles.first()
+    if bible is None or not bible.locked:
+        raise ValueError("Verrouille la bible avant de générer l'image de scène")
+    from agents.roles.art_director import ArtDirector
+    artist = ArtDirector()
+    characters = [{"key": c.key, "name": c.name, "look": c.look} for c in beat.characters.all().order_by("key")]
+    location = None
+    if beat.location_id:
+        location = {"key": beat.location.key, "name": beat.location.name, "look": beat.location.look}
+    props = [{"key": p.key, "name": p.name, "look": p.look} for p in beat.props.all().order_by("key")]
+    uri = artist.scene_frame(
+        beat_text=beat.text,
+        characters=characters,
+        location=location,
+        props=props,
+        camera=beat.camera if isinstance(beat.camera, dict) else {},
+        emotion=beat.emotion,
+        project_key=f"{project.id}-{project.slug}",
+        visual_style=project.visual_style,
+        custom_prompt=custom_prompt,
+    )
+    # Keep history for audit/review. Only one frame is marked locked at a time.
+    Asset.objects.filter(project=project, beat=beat, role=Asset.Role.START_FRAME).update(
+        meta={**(Asset.objects.filter(project=project, beat=beat, role=Asset.Role.START_FRAME).order_by("-id").first().meta or {}), "locked": False}
+    ) if Asset.objects.filter(project=project, beat=beat, role=Asset.Role.START_FRAME).exists() else None
+    return Asset.objects.create(
+        project=project,
+        beat=beat,
+        kind=Asset.Kind.IMAGE,
+        role=Asset.Role.START_FRAME,
+        uri=uri,
+        provider=getattr(artist.image, "provider_id", ""),
+        meta={
+            "scene_frame": True,
+            "locked": False,
+            "custom_prompt": custom_prompt,
+            "beat_index": beat.index,
+            "character_keys": [row["key"] for row in characters],
+            "location_key": location["key"] if location else None,
+            "prop_keys": [row["key"] for row in props],
+            "visual_style": project.visual_style,
+        },
+    )
+
+
+def lock_beat_scene_frame(beat, asset_id: int):
+    asset = Asset.objects.filter(
+        pk=asset_id,
+        project=beat.episode.season.project,
+        beat=beat,
+        role=Asset.Role.START_FRAME,
+        kind=Asset.Kind.IMAGE,
+    ).first()
+    if asset is None:
+        raise ValueError("Image de scène introuvable pour ce beat")
+    for candidate in Asset.objects.filter(project=asset.project, beat=beat, role=Asset.Role.START_FRAME):
+        meta = dict(candidate.meta or {})
+        meta["locked"] = candidate.pk == asset.pk
+        candidate.meta = meta
+        candidate.save(update_fields=["meta"])
+    return asset
