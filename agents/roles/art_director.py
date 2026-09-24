@@ -60,6 +60,22 @@ class ArtDirector:
             project_key=project_key,
         )
 
+    def scene_frame(self, *, beat_text: str, characters: list[dict], location: dict | None, props: list[dict], camera: dict | None = None, emotion: str = "", project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
+        character_text = "; ".join(f"{row.get('name')}: {row.get('look')}" for row in characters) or "No named character"
+        prop_text = "; ".join(f"{row.get('name')}: {row.get('look')}" for row in props) or "No important prop"
+        location_text = f"{location.get('name')}: {location.get('look')}" if location else "Canonical story location"
+        return self.image.generate(
+            f"VISUAL STYLE LOCK: {visual_style_prompt(visual_style)} "
+            "Create ONE cinematic production frame for this exact narrative beat. This is a master scene frame for later video generation, not a character sheet, collage, storyboard or poster. "
+            "Compose a single coherent film still with physically plausible blocking, lens perspective, lighting and depth. "
+            "Preserve the exact canonical identity, wardrobe and appearance described for every named character; preserve the exact set and prop identity. "
+            "Show the precise story moment visually. Do not render dialogue, captions, labels, subtitles, logos or watermarks. "
+            f"BEAT: {beat_text}. LOCATION: {location_text}. CHARACTERS: {character_text}. PROPS: {prop_text}. "
+            f"CAMERA INTENT: {camera or {}}. PERFORMANCE/EMOTION: {emotion or 'natural to the beat'}. "
+            f"USER REFINEMENT: {custom_prompt.strip() if custom_prompt.strip() else 'None. Stage the canonical beat professionally.'}",
+            project_key=project_key,
+        )
+
     def prop_ref(self, *, name: str, look: str, project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
         return self.image.generate(
             f"VISUAL STYLE LOCK: {visual_style_prompt(visual_style)} Product-style hero shot of a story prop in that exact style, plain background, no text. "
