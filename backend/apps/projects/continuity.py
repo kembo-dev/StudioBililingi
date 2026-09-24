@@ -200,7 +200,16 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     project = beat.episode.season.project
     previous_take = shot.takes.exclude(uri="").order_by("-number").first()
 
-    lines = [
+    adjustment = str(adjustment_prompt or "").strip()
+    lines = []
+    if adjustment:
+        lines.extend([
+            "USER ADJUSTMENT - HIGH PRIORITY FOR THIS NEW TAKE:",
+            adjustment,
+            "Apply this requested camera/acting/lighting/staging change visibly in the generated take while preserving all canonical identity, story and dialogue locks below.",
+            "",
+        ])
+    lines.extend([
         "VISUAL ACTION ONLY - NEVER SPEAK OR NARRATE THIS TEXT:",
         shot.video_prompt or shot.text,
         "",
@@ -210,14 +219,15 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         f"Render visually only this shot action: {shot.text}",
         "The action/description text is silent directing metadata. It must NEVER be spoken, narrated, read aloud, lip-synced, or turned into dialogue by any character or off-screen voice.",
         "Do not add, translate, paraphrase or replace spoken dialogue.",
-    ]
+    ])
     if beat.dialogue:
         lines.extend([
             "SPEECH MODE: DIALOGUE ONLY.",
-            f'ONLY ALLOWED SPOKEN WORDS: "{beat.dialogue}"',
-            "No narration, no description, no extra words before or after the canonical dialogue.",
-            "LANGUAGE LOCK: speak the canonical dialogue exactly in its original language. "
-            "Do not translate it to English or to any other language.",
+            f'ONLY ALLOWED SPOKEN WORDS (verbatim): "{beat.dialogue}"',
+            "The canonical story/dialogue language is French when the supplied dialogue is French. Pronounce French text in French; never replace it with English or another language.",
+            "No narration, no description, no improvised words, no extra words before or after the canonical dialogue.",
+            "LANGUAGE LOCK: speak the canonical dialogue verbatim in its original language. "
+            "Do not translate, paraphrase, summarize or switch language.",
         ])
     else:
         lines.extend([
@@ -245,7 +255,6 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
             *uid_lines,
             "Every occurrence of the same UID across beats and shots is the exact same canonical entity. Never reinterpret or replace it.",
         ])
-    adjustment = str(adjustment_prompt or "").strip()
     if adjustment and previous_take:
         lines.extend([
             "",
@@ -255,10 +264,9 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     if adjustment:
         lines.extend([
             "",
-            "USER TAKE ADJUSTMENT:",
-            adjustment,
-            "Apply this adjustment only to staging, acting, framing, camera, lighting, rhythm or other non-canonical presentation details. "
-            "It must never override character identity, canonical references, location identity, story facts, exact dialogue, original dialogue language, voice continuity or locked visual style.",
+            "USER ADJUSTMENT CONFIRMATION:",
+            f"The requested change for this take is: {adjustment}",
+            "The resulting take must visibly reflect that change. It may alter staging, acting, framing, camera, lighting or rhythm, but never canonical identity, references, story facts, exact dialogue, dialogue language, voice continuity or locked visual style.",
         ])
     return {
         **readiness,
