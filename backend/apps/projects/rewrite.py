@@ -25,6 +25,7 @@ def recontextualize_beat(beat: Beat, instruction: str, form: str = "storytell") 
     project = beat.episode.season.project
     bible = project.bibles.first()
     text = ""
+    rewrite_meta = {}
     try:
         from agents.roles.rewriter import BeatRewriter
         raw = BeatRewriter().rewrite(
@@ -36,6 +37,15 @@ def recontextualize_beat(beat: Beat, instruction: str, form: str = "storytell") 
         )
         if isinstance(raw, dict):
             text = (raw.get("text") or "").strip()
+            video_prompt = (raw.get("video_prompt") or "").strip()
+            rewrite_meta = {
+                "intent": (raw.get("intent") or "").strip(),
+                "continuity": (raw.get("continuity") or "").strip(),
+                "performance": (raw.get("performance") or "").strip(),
+                "camera": (raw.get("camera") or "").strip(),
+                "sound": (raw.get("sound") or "").strip(),
+                "video_prompt": video_prompt,
+            }
     except Exception:
         text = ""
     if not text:
@@ -49,7 +59,12 @@ def recontextualize_beat(beat: Beat, instruction: str, form: str = "storytell") 
         negative_prompt=beat.negative_prompt,
         backend=beat.backend,
         status=BeatTake.Status.QUEUED,
-        generation_meta={"form": form, "rewrite_instruction": prompt, "source_text": beat.text},
+        generation_meta={
+            "form": form,
+            "rewrite_instruction": prompt,
+            "source_text": beat.text,
+            "script_doctor": rewrite_meta,
+        },
     )
     Review.objects.create(beat=beat, episode=beat.episode, decision=Review.Decision.REVISE, comment=f"[{form}] {prompt}")
     return beat
