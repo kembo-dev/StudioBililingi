@@ -346,12 +346,56 @@ class ShotViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.serializer_class(self.get_queryset().get(pk=shot.pk)).data)
 
+    @action(detail=True, methods=["post"], url_path="upload-adjustment-reference")
+    def upload_adjustment_reference(self, request, pk=None):
+        import uuid
+        from pathlib import Path
+        from django.conf import settings
+
+        shot = self.get_object()
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Ajoute une image de référence"}, status=status.HTTP_400_BAD_REQUEST)
+        content_type = str(getattr(upload, "content_type", "") or "")
+        if not content_type.startswith("image/"):
+            return Response({"detail": "La pièce jointe doit être une image"}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(upload, "size", 0) > 15 * 1024 * 1024:
+            return Response({"detail": "La pièce jointe est limitée à 15 Mo"}, status=status.HTTP_400_BAD_REQUEST)
+        suffix = Path(str(upload.name or "")).suffix.lower()
+        if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+            suffix = ".jpg"
+        project = shot.beat.episode.season.project
+        relative = Path("adjustment-refs") / f"{project.id}-{project.slug}" / f"shot-{shot.id}"
+        directory = Path(settings.MEDIA_ROOT) / relative
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / f"{uuid.uuid4().hex}{suffix}"
+        with target.open("wb") as handle:
+            for chunk in upload.chunks():
+                handle.write(chunk)
+        uri = f"/media/{relative.as_posix()}/{target.name}"
+        return Response({"uri": uri, "name": upload.name}, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"])
     def render(self, request, pk=None):
         from apps.jobs.models import Job
         from apps.jobs.queue import enqueue, is_eager
         shot = self.get_object()
         adjustment_prompt = str(request.data.get("prompt") or request.data.get("adjustment_prompt") or "").strip()
+        adjustment_reference_uri = str(request.data.get("adjustment_reference_uri") or "").strip()
+        adjustment_mode = str(request.data.get("adjustment_mode") or "custom").strip()
+        if adjustment_mode == "language":
+            adjustment_prompt = (
+                "LANGUAGE REPAIR: keep the exact same visual shot, identities, framing and story action. "
+                "Correct only the spoken audio. Speak ONLY the canonical dialogue from the script, verbatim, "
+                "in its original language. If the canonical dialogue is French, speak French only. "
+                "Never translate to English or another language and never add narration."
+            )
+        elif adjustment_mode == "script":
+            adjustment_prompt = (
+                "SCRIPT REPAIR: regenerate this take to follow the canonical script exactly. "
+                "Preserve character identities and visual continuity. Perform only the canonical action and "
+                "speak only the canonical dialogue verbatim. Do not invent, omit, translate, paraphrase or narrate."
+            )
         active = Job.objects.filter(
             project=shot.beat.episode.season.project,
             kind=Job.Kind.VIDEO,
@@ -372,7 +416,12 @@ class ShotViewSet(viewsets.ReadOnlyModelViewSet):
             project=shot.beat.episode.season.project,
             kind=Job.Kind.VIDEO,
             agent_role="cinematographer",
-            payload={"shot_id": shot.id, "adjustment_prompt": adjustment_prompt},
+            payload={
+                "shot_id": shot.id,
+                "adjustment_prompt": adjustment_prompt,
+                "adjustment_reference_uri": adjustment_reference_uri,
+                "adjustment_mode": adjustment_mode,
+            },
         )
         if is_eager() and job.status == Job.Status.FAILED:
             return Response({"detail": job.error}, status=status.HTTP_400_BAD_REQUEST)
