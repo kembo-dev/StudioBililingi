@@ -38,7 +38,7 @@ type Episode = {
   scenes: Scene[];
   scene_plans: ScenePlan[];
   episode_cut?: { id: number; uri: string; provider: string; meta?: Record<string, unknown> } | null;
-  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; missing: string[] };
+  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; missing: string[]; blockers?: { beat_id: number; beat_index: number; shot_id: number | null; shot_index: number | null; take_id: number | null; take_number: number | null; take_status: string; has_video: boolean; label: string }[] };
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; key: string; name: string; look: string };
@@ -431,8 +431,50 @@ export default function ProjectPage() {
                   </div>
                   {ep.assembly_readiness?.ready ? <span className="text-xs text-green-400">✓ prêt à assembler</span> : <span className="text-xs text-amber-300">Verrouille tous les takes avant l’assemblage</span>}
                 </div>
-                {!ep.assembly_readiness?.ready && ep.assembly_readiness?.missing?.length ? (
-                  <p className="mt-2 text-[10px] text-[#9aa3b2]">Manquant : {ep.assembly_readiness.missing.slice(0, 5).join(" · ")}{ep.assembly_readiness.missing.length > 5 ? " …" : ""}</p>
+                {!ep.assembly_readiness?.ready && ep.assembly_readiness?.blockers?.length ? (
+                  <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-amber-300">À terminer avant l’assemblage</p>
+                        <p className="text-[10px] text-[#9aa3b2]">Accède directement au shot concerné pour générer ou verrouiller son take.</p>
+                      </div>
+                      <span className="rounded-full border border-amber-400/30 px-2 py-0.5 text-[10px] text-amber-300">{ep.assembly_readiness.blockers.length} restant{ep.assembly_readiness.blockers.length > 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {ep.assembly_readiness.blockers.map((item) => (
+                        <div key={`${item.beat_id}-${item.shot_id ?? "missing"}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#2a2e38] bg-[#14161c] px-3 py-2">
+                          <div>
+                            <p className="text-xs text-white">{item.label}</p>
+                            <p className="text-[10px] text-[#9aa3b2]">
+                              {item.take_number ? `Take ${item.take_number} · ${item.take_status}` : item.shot_id ? "Aucun take vidéo disponible" : "Shots non préparés"}
+                            </p>
+                          </div>
+                          {item.shot_id ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const target = document.getElementById(`shot-${item.shot_id}`);
+                                target?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                window.setTimeout(() => target?.classList.add("ring-2", "ring-amber-400"), 250);
+                                window.setTimeout(() => target?.classList.remove("ring-2", "ring-amber-400"), 2200);
+                              }}
+                              className="rounded border border-amber-400/50 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-400/10"
+                            >
+                              {item.has_video ? "Aller au take à verrouiller" : "Aller au shot"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById(`beat-${item.beat_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                              className="rounded border border-amber-400/50 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-400/10"
+                            >
+                              Aller au beat
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
                 {ep.episode_cut?.uri ? (
                   <div className="mt-3">
@@ -471,7 +513,7 @@ export default function ProjectPage() {
                     {beat.shots?.length ? (
                       <div className="space-y-2 border-l border-[#2a2e38] pl-3">
                         {beat.shots.map((shot) => (
-                          <div key={shot.id} className="rounded-lg border border-[#2a2e38] bg-[#14161c] p-3">
+                          <div id={`shot-${shot.id}`} key={shot.id} className="scroll-mt-6 rounded-lg border border-[#2a2e38] bg-[#14161c] p-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <p className="text-xs font-medium text-[#e8c36a]">Shot vidéo {shot.index} · {Number(shot.duration_seconds).toFixed(1)}s · {shot.status}</p>
                               <button disabled={busy === `render-shot-${shot.id}` || shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running"} onClick={() => generateShotTake(shot.id)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a] disabled:cursor-wait disabled:opacity-50">{shotJobs[shot.id]?.status === "queued" ? "En file d’attente…" : shotJobs[shot.id]?.status === "running" ? "Vidéo en génération…" : busy === `render-shot-${shot.id}` ? "Démarrage…" : "Générer un take"}</button>
