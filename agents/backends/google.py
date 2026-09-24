@@ -184,6 +184,33 @@ class GoogleImageBackend:
 class GoogleVideoBackend:
     provider_id = "google-veo-3.1"
 
+    def extract_reference_frame(self, video_uri: str, *, project_key: str | None = None) -> str:
+        """Extract the first stable frame of a previous local take for visual re-adjustment."""
+        import subprocess
+
+        source = _local_media_path(video_uri)
+        if source is None:
+            raise ValueError("Previous take is not available as a local Studio video")
+        relative = Path("take-frames")
+        if project_key:
+            relative /= _safe_media_segment(project_key)
+        directory = _media_root() / relative
+        directory.mkdir(parents=True, exist_ok=True)
+        output = directory / f"{uuid.uuid4().hex}.jpg"
+        command = [
+            "ffmpeg", "-y", "-ss", "0.15", "-i", str(source),
+            "-frames:v", "1", "-q:v", "2", str(output),
+        ]
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError(f"Unable to extract previous take frame: {exc}") from exc
+        if result.returncode != 0 or not output.exists():
+            raise RuntimeError(
+                "Unable to extract previous take frame: " + (result.stderr or "")[-500:]
+            )
+        return f"/media/{relative.as_posix()}/{output.name}"
+
     def render(
         self,
         prompt: str,
