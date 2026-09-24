@@ -506,9 +506,32 @@ export default function ProjectPage() {
                       <span className="mr-2 text-[#e8c36a]">{String(beat.index + 1).padStart(2, "0")} \u00b7 {beat.word_count} mots \u00b7 {beat.status}</span>
                       {beat.text}
                     </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-[#2a2e38] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#9aa3b2]">Beat narratif</span>
-                      <button onClick={() => run(`shots-${beat.id}`, `/api/beats/${beat.id}/plan-shots/`)} className="rounded border border-[#e8c36a] px-2 py-0.5 text-xs text-[#e8c36a]">{busy === `shots-${beat.id}` ? "…" : beat.shots?.length ? "Shots préparés" : "Préparer les shots"}</button>
+                    <div className="rounded-lg border border-[#2a2e38] bg-[#101217] p-3">
+                      <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.12em]">
+                        <span className="rounded-full border border-green-500/40 px-2 py-1 text-green-400">1 · Refs canoniques</span>
+                        <span className="text-[#6f7785]">→</span>
+                        <span className={`rounded-full border px-2 py-1 ${beat.scene_frames?.[0]?.meta?.locked ? "border-green-500/40 text-green-400" : "border-[#e8c36a]/50 text-[#e8c36a]"}`}>2 · Image de scène</span>
+                        <span className="text-[#6f7785]">→</span>
+                        <span className={`rounded-full border px-2 py-1 ${beat.scene_frames?.[0]?.meta?.locked ? "border-[#e8c36a]/50 text-[#e8c36a]" : "border-[#2a2e38] text-[#6f7785]"}`}>3 · Shots & vidéo</span>
+                      </div>
+                      <div className="rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div><p className="text-xs font-medium text-[#e8c36a]">🖼 Image de scène du beat</p><p className="text-[10px] text-[#6f7785]">Générée à partir des refs canoniques du beat. Une fois verrouillée, elle rejoint ces refs pour guider la vidéo.</p></div>
+                          <button type="button" onClick={() => run(`scene-frame-${beat.id}`, `/api/beats/${beat.id}/generate-scene-frame/`, { prompt: sceneFramePrompts[beat.id] ?? "" })} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a]">{busy === `scene-frame-${beat.id}` ? "Génération…" : beat.scene_frames?.length ? "Régénérer l’image" : "Générer l’image de scène"}</button>
+                        </div>
+                        {beat.scene_frames?.[0] ? <div className="mt-2 space-y-2">
+                          <img src={mediaUrl(beat.scene_frames[0].uri)} alt={`Image de scène beat ${beat.index}`} className="max-h-80 w-full rounded border border-[#2a2e38] object-contain bg-black" />
+                          <div className="flex flex-wrap gap-2">
+                            <input maxLength={4000} value={sceneFramePrompts[beat.id] ?? ""} onChange={(e) => setSceneFramePrompts((cur) => ({ ...cur, [beat.id]: e.target.value }))} placeholder="Reprompter l’image de scène…" className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]" />
+                            {!beat.scene_frames[0].meta?.locked ? <button type="button" onClick={() => run(`lock-frame-${beat.id}`, `/api/beats/${beat.id}/lock-scene-frame/`, { asset_id: beat.scene_frames?.[0]?.id })} className="rounded border border-green-500/60 px-2 py-1 text-xs text-green-400">{busy === `lock-frame-${beat.id}` ? "…" : "✓ Verrouiller l’image"}</button> : <span className="self-center text-xs text-green-400">✓ Image de scène verrouillée · prête comme ref vidéo</span>}
+                          </div>
+                        </div> : <p className="mt-2 text-[10px] text-amber-300">Étape suivante : génère l’image de scène depuis les références du beat.</p>}
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-[#2a2e38] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#9aa3b2]">Beat narratif</span>
+                        <button disabled={!beat.scene_frames?.[0]?.meta?.locked} onClick={() => run(`shots-${beat.id}`, `/api/beats/${beat.id}/plan-shots/`)} className="rounded border border-[#e8c36a] px-2 py-0.5 text-xs text-[#e8c36a] disabled:cursor-not-allowed disabled:opacity-35">{busy === `shots-${beat.id}` ? "…" : beat.shots?.length ? "Repréparer les shots" : "Préparer les shots"}</button>
+                        {!beat.scene_frames?.[0]?.meta?.locked ? <span className="text-[10px] text-[#6f7785]">Verrouille d’abord l’image de scène.</span> : null}
+                      </div>
                     </div>
                     {beat.shots?.length ? (
                       <div className="space-y-2 border-l border-[#2a2e38] pl-3">
@@ -516,7 +539,7 @@ export default function ProjectPage() {
                           <div id={`shot-${shot.id}`} key={shot.id} className="scroll-mt-6 rounded-lg border border-[#2a2e38] bg-[#14161c] p-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <p className="text-xs font-medium text-[#e8c36a]">Shot vidéo {shot.index} · {Number(shot.duration_seconds).toFixed(1)}s · {shot.status}</p>
-                              <button disabled={busy === `render-shot-${shot.id}` || shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running"} onClick={() => generateShotTake(shot.id)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a] disabled:cursor-wait disabled:opacity-50">{shotJobs[shot.id]?.status === "queued" ? "En file d’attente…" : shotJobs[shot.id]?.status === "running" ? "Vidéo en génération…" : busy === `render-shot-${shot.id}` ? "Démarrage…" : "Générer un take"}</button>
+                              <button disabled={!beat.scene_frames?.[0]?.meta?.locked || busy === `render-shot-${shot.id}` || shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running"} onClick={() => generateShotTake(shot.id)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a] disabled:cursor-wait disabled:opacity-50">{shotJobs[shot.id]?.status === "queued" ? "En file d’attente…" : shotJobs[shot.id]?.status === "running" ? "Vidéo en génération…" : busy === `render-shot-${shot.id}` ? "Démarrage…" : "Générer un take"}</button>
                             </div>
                             {shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running" ? <div className="mt-2 rounded border border-[#e8c36a]/30 bg-[#e8c36a]/5 px-3 py-2 text-xs text-[#e8c36a]"><p>{shotJobs[shot.id]?.status === "queued" ? "Take en file d’attente. Tu peux continuer à travailler, cette zone se met à jour automatiquement." : "Veo génère le clip. La vidéo apparaîtra ici automatiquement dès qu’elle sera prête."}</p><div className="mt-2 h-1 overflow-hidden rounded bg-[#2a2e38]"><div className="h-full w-1/2 animate-pulse rounded bg-[#e8c36a]" /></div></div> : null}
                             {shotJobs[shot.id]?.status === "succeeded" ? <p className="mt-2 text-xs text-green-400">✓ Take généré. La vidéo est prête à être visionnée et verrouillée.</p> : null}
@@ -638,19 +661,6 @@ export default function ProjectPage() {
                         ))}
                       </div>
                     ) : <p className="text-[11px] text-[#6f7785]">Ce beat raconte l’histoire. Prépare ses shots avant toute génération vidéo.</p>}
-                    <div className="mb-2 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div><p className="text-xs font-medium text-[#e8c36a]">🖼 Image de scène du beat</p><p className="text-[10px] text-[#6f7785]">Master visuel utilisé comme ancre avant la génération vidéo.</p></div>
-                        <button type="button" onClick={() => run(`scene-frame-${beat.id}`, `/api/beats/${beat.id}/generate-scene-frame/`, { prompt: sceneFramePrompts[beat.id] ?? "" })} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a]">{busy === `scene-frame-${beat.id}` ? "Génération…" : beat.scene_frames?.length ? "Régénérer l’image" : "Générer l’image"}</button>
-                      </div>
-                      {beat.scene_frames?.[0] ? <div className="mt-2 space-y-2">
-                        <img src={mediaUrl(beat.scene_frames[0].uri)} alt={`Image de scène beat ${beat.index}`} className="max-h-80 w-full rounded border border-[#2a2e38] object-contain bg-black" />
-                        <div className="flex flex-wrap gap-2">
-                          <input maxLength={4000} value={sceneFramePrompts[beat.id] ?? ""} onChange={(e) => setSceneFramePrompts((cur) => ({ ...cur, [beat.id]: e.target.value }))} placeholder="Reprompter l’image… ex. plan plus serré, pluie légère, lumière chaude, Antoine regarde hors champ" className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]" />
-                          {!beat.scene_frames[0].meta?.locked ? <button type="button" onClick={() => run(`lock-frame-${beat.id}`, `/api/beats/${beat.id}/lock-scene-frame/`, { asset_id: beat.scene_frames?.[0]?.id })} className="rounded border border-green-500/60 px-2 py-1 text-xs text-green-400">{busy === `lock-frame-${beat.id}` ? "…" : "✓ Verrouiller cette image"}</button> : <span className="self-center text-xs text-green-400">✓ Image de scène verrouillée</span>}
-                        </div>
-                      </div> : <p className="mt-2 text-[10px] text-amber-300">Génère puis verrouille une image de scène avant de produire la vidéo de ce beat.</p>}
-                    </div>
                     <div className="rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
                       <button type="button" onClick={() => setReframeOpen((cur) => ({ ...cur, [beat.id]: !cur[beat.id] }))} className="flex w-full items-center justify-between gap-3 text-left">
                         <span><span className="block text-xs font-medium text-[#e8c36a]">🎬 Mise en scène du beat</span><span className="block text-[10px] text-[#6f7785]">Script doctor · intention, continuité, jeu, caméra et son</span></span>
