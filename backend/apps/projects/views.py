@@ -432,6 +432,28 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Beat.objects.prefetch_related("assets").select_related("episode__season__project")
     serializer_class = BeatSerializer
 
+    @action(detail=True, methods=["post"], url_path="generate-scene-frame")
+    def generate_scene_frame(self, request, pk=None):
+        from apps.projects.visuals import generate_beat_scene_frame
+        beat = self.get_object()
+        try:
+            generate_beat_scene_frame(beat, request.data.get("prompt") or "")
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        beat = self.get_queryset().get(pk=beat.pk)
+        return Response(BeatSerializer(beat).data)
+
+    @action(detail=True, methods=["post"], url_path="lock-scene-frame")
+    def lock_scene_frame(self, request, pk=None):
+        from apps.projects.visuals import lock_beat_scene_frame
+        beat = self.get_object()
+        try:
+            lock_beat_scene_frame(beat, int(request.data.get("asset_id") or 0))
+        except (TypeError, ValueError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        beat = self.get_queryset().get(pk=beat.pk)
+        return Response(BeatSerializer(beat).data)
+
     @action(detail=True, methods=["post"], url_path="plan-shots")
     def plan_shots(self, request, pk=None):
         beat = self.get_object()
