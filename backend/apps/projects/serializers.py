@@ -72,10 +72,17 @@ class BeatSerializer(serializers.ModelSerializer):
     shots = ShotSerializer(many=True, read_only=True)
     character_ids = serializers.PrimaryKeyRelatedField(source="characters", many=True, read_only=True)
     prop_ids = serializers.PrimaryKeyRelatedField(source="props", many=True, read_only=True)
+    scene_frames = serializers.SerializerMethodField()
 
     class Meta:
         model = Beat
-        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes", "shots")
+        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes", "shots", "scene_frames")
+
+    def get_scene_frames(self, obj):
+        return [
+            {"id": asset.id, "uri": asset.uri, "provider": asset.provider, "meta": asset.meta}
+            for asset in obj.assets.filter(role="start_frame").order_by("-id")
+        ]
 
     def get_clip_uri(self, obj):
         locked = obj.takes.filter(status=BeatTake.Status.LOCKED).order_by("-number").first()
