@@ -78,6 +78,25 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(second[0].script_id, script.id)
         self.assertEqual(self.episode.scenes.count(), 2)
 
+    def test_beat_scene_plan_location_ids_are_case_insensitive(self):
+        from apps.projects.services import _beat_scene_plan_errors
+
+        errors = _beat_scene_plan_errors(
+            [{
+                "scene_index": 1,
+                "location_id": "GareKinshasa",
+                "time_of_day": "Nuit",
+                "event_id": "EV01",
+            }],
+            [{
+                "index": 1,
+                "location_id": "garekinshasa",
+                "time_of_day": "Nuit",
+                "event_ids": ["EV01"],
+            }],
+        )
+        self.assertEqual(errors, [])
+
     def test_scene_plan_normalizes_names_and_llm_aliases_to_canonical_keys(self):
         from apps.projects.services import _canonical_scene_plan_ids
 
