@@ -275,6 +275,14 @@ class ProductionPipelineTests(TestCase):
             uri="/media/clips/previous.mp4",
             status=ShotTake.Status.REVIEW,
         )
+        Asset.objects.create(
+            project=self.project,
+            beat=beat,
+            kind=Asset.Kind.IMAGE,
+            role=Asset.Role.START_FRAME,
+            uri="/media/scene-frames/beat.jpg",
+            meta={"scene_frame": True, "locked": True},
+        )
 
         class FakeVideo:
             provider_id = "fake-veo"
