@@ -1443,27 +1443,16 @@ def run_segment(episode: Episode, script_text: str | None = None) -> list[Beat]:
 
 
 def _veo_shot_durations(total_seconds: float) -> list[int]:
-    """Return the closest lossless production timeline using Veo 4/6/8s clips."""
-    total = max(0.1, float(total_seconds or 0))
-    target = int(total) if total.is_integer() else int(total) + 1
-    if target < 4:
-        return [4]
-    if target % 2:
-        target += 1
+    """Return Veo reference-to-video clips.
 
-    durations = []
-    remaining = target
-    while remaining:
-        if remaining >= 8 and remaining - 8 != 2:
-            durations.append(8)
-            remaining -= 8
-        elif remaining >= 6 and remaining - 6 != 2:
-            durations.append(6)
-            remaining -= 6
-        else:
-            durations.append(4)
-            remaining -= 4
-    return durations
+    Veo 3.1 reference_to_video currently accepts only 8-second outputs, so every
+    production shot must be 8 seconds. The final clip may contain intentional
+    hold/reaction time instead of requesting an unsupported 4s/6s render.
+    """
+    import math
+
+    total = max(0.1, float(total_seconds or 0))
+    return [8] * max(1, math.ceil(total / 8.0))
 
 
 def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
