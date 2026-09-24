@@ -197,6 +197,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         ]
         shot.save(update_fields=["reference_uids"])
     pack = resolve_ingredients(beat, reference_uids=shot.reference_uids)
+    scene_frame = beat.assets.filter(role=Asset.Role.START_FRAME, meta__locked=True).order_by("-id").first()
     project = beat.episode.season.project
     previous_take = shot.takes.exclude(uri="").order_by("-number").first()
 
@@ -274,6 +275,10 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         "project": project,
         "ingredients": pack,
         "context": context,
+        "scene_frame": (
+            {"id": scene_frame.id, "uri": scene_frame.uri, "meta": scene_frame.meta}
+            if scene_frame else None
+        ),
         "previous_take": (
             {"id": previous_take.id, "number": previous_take.number, "uri": previous_take.uri}
             if previous_take else None
@@ -289,6 +294,9 @@ def validate_render_readiness(beat: Beat) -> dict:
 
     if not beat.video_prompt and not beat.text:
         errors.append("beat sans prompt vidéo exploitable")
+    scene_frame = beat.assets.filter(role=Asset.Role.START_FRAME, meta__locked=True).order_by("-id").first()
+    if scene_frame is None:
+        errors.append("image de scène du beat absente ou non verrouillée")
     if beat.dialogue and not beat.speaker_id:
         errors.append("dialogue sans speaker canonique")
     if beat.location_id and not any(
