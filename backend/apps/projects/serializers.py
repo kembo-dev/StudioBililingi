@@ -103,10 +103,12 @@ class EpisodeSerializer(serializers.ModelSerializer):
     scenes = serializers.SerializerMethodField()
     latest_script = serializers.SerializerMethodField()
     scene_plans = serializers.SerializerMethodField()
+    episode_cut = serializers.SerializerMethodField()
+    assembly_readiness = serializers.SerializerMethodField()
 
     class Meta:
         model = Episode
-        fields = ("id", "number", "title", "logline", "function_in_arc", "status", "beats", "scenes", "latest_script", "scene_plans")
+        fields = ("id", "number", "title", "logline", "function_in_arc", "status", "beats", "scenes", "latest_script", "scene_plans", "episode_cut", "assembly_readiness")
 
     def _latest(self, obj):
         return obj.scripts.order_by("-version").first()
@@ -137,6 +139,49 @@ class EpisodeSerializer(serializers.ModelSerializer):
     def get_latest_script(self, obj):
         script = obj.scripts.order_by("-version").first()
         return script.fountain if script else ""
+
+    def get_episode_cut(self, obj):
+        from apps.production.models import Asset
+
+        asset = obj.season.project.assets.filter(
+            role=Asset.Role.EPISODE_CUT,
+            meta__episode_id=obj.id,
+        ).order_by("-id").first()
+        if not asset:
+            return None
+        return {"id": asset.id, "uri": asset.uri, "provider": asset.provider, "meta": asset.meta}
+
+    def get_assembly_readiness(self, obj):
+        from apps.story.models import ShotTake
+
+        script = self._latest(obj)
+        if not script:
+            return {"ready": False, "total_shots": 0, "locked_shots": 0, "missing": ["Aucun script"]}
+        segmentation = self._latest_segmentation(script)
+        beats_qs = segmentation.beats if segmentation else script.beats
+        beats = list(beats_qs.order_by("index").prefetch_related("shots__takes"))
+        missing = []
+        total = 0
+        locked = 0
+        for beat in beats:
+            shots = list(beat.shots.order_by("index"))
+            if not shots:
+                missing.append(f"Beat {beat.index}: aucun shot")
+                continue
+            for shot in shots:
+                total += 1
+                take = shot.takes.filter(status=ShotTake.Status.LOCKED).exclude(uri="").order_by("-number").first()
+                if take:
+                    locked += 1
+                else:
+                    missing.append(f"Beat {beat.index} / Shot {shot.index}")
+        return {
+            "ready": bool(beats) and total > 0 and not missing,
+            "total_shots": total,
+            "locked_shots": locked,
+            "missing": missing,
+        }
+
 
 
 class SeasonSerializer(serializers.ModelSerializer):
