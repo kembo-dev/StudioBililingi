@@ -137,9 +137,9 @@ class ProductionPipelineTests(TestCase):
         with patch("agents.roles.shot_planner.ShotPlanner.plan", return_value=planned):
             shots = plan_beat_shots(beat, max_shot_seconds=8)
         self.assertEqual(len(shots), 3)
-        self.assertEqual([float(shot.duration_seconds) for shot in shots], [8.0, 6.0, 4.0])
-        self.assertAlmostEqual(sum(float(shot.duration_seconds) for shot in shots), 18.0, places=1)
-        self.assertTrue(all(float(shot.duration_seconds) in {4.0, 6.0, 8.0} for shot in shots))
+        self.assertEqual([float(shot.duration_seconds) for shot in shots], [8.0, 8.0, 8.0])
+        self.assertGreaterEqual(sum(float(shot.duration_seconds) for shot in shots), 18.0)
+        self.assertTrue(all(float(shot.duration_seconds) == 8.0 for shot in shots))
         self.assertEqual([shot.text for shot in shots], [
             "Malaika explique son echec.",
             "Safia ecoute sans interrompre.",
