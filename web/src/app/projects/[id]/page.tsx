@@ -36,6 +36,8 @@ type Episode = {
   beats: Beat[];
   scenes: Scene[];
   scene_plans: ScenePlan[];
+  episode_cut?: { id: number; uri: string; provider: string; meta?: Record<string, unknown> } | null;
+  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; missing: string[] };
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; key: string; name: string; look: string };
@@ -381,8 +383,40 @@ export default function ProjectPage() {
                 <button onClick={() => run(`scr-${ep.id}`, `/api/episodes/${ep.id}/write-script/`)} className="rounded-lg border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a]">{busy === `scr-${ep.id}` ? "\u2026" : "Écrire le script"}</button>
                 <button onClick={() => run(`plan-${ep.id}`, `/api/episodes/${ep.id}/plan-scenes/`)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs">{busy === `plan-${ep.id}` ? "…" : ep.scene_plans?.length ? "Régénérer le Scene Plan" : "Générer le Scene Plan"}</button>
                 <button disabled={!ep.scene_plans?.some((plan) => plan.locked)} onClick={() => run(`seg-${ep.id}`, `/api/episodes/${ep.id}/segment/`)} className="rounded-lg border border-[#2a2e38] px-3 py-1 text-xs disabled:opacity-40">{busy === `seg-${ep.id}` ? "…" : "Découper en beats"}</button>
+                <button
+                  disabled={!ep.assembly_readiness?.ready || busy === `assemble-${ep.id}`}
+                  onClick={() => run(`assemble-${ep.id}`, `/api/episodes/${ep.id}/assemble/`)}
+                  className="rounded-lg border border-green-500/60 px-3 py-1 text-xs text-green-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {busy === `assemble-${ep.id}` ? "Assemblage…" : ep.episode_cut ? "Réassembler l’épisode" : "Assembler l’épisode"}
+                </button>
               </div>
             </div>
+            {ep.beats.length ? (
+              <div className="mt-4 rounded-xl border border-[#2a2e38] bg-[#0b0c10] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Montage final de l’épisode</p>
+                    <p className="text-xs text-[#9aa3b2]">
+                      {ep.assembly_readiness?.locked_shots ?? 0}/{ep.assembly_readiness?.total_shots ?? 0} shots avec un take verrouillé
+                    </p>
+                  </div>
+                  {ep.assembly_readiness?.ready ? <span className="text-xs text-green-400">✓ prêt à assembler</span> : <span className="text-xs text-amber-300">Verrouille tous les takes avant l’assemblage</span>}
+                </div>
+                {!ep.assembly_readiness?.ready && ep.assembly_readiness?.missing?.length ? (
+                  <p className="mt-2 text-[10px] text-[#9aa3b2]">Manquant : {ep.assembly_readiness.missing.slice(0, 5).join(" · ")}{ep.assembly_readiness.missing.length > 5 ? " …" : ""}</p>
+                ) : null}
+                {ep.episode_cut?.uri ? (
+                  <div className="mt-3">
+                    <video controls className="max-h-[32rem] w-full rounded bg-black" src={mediaUrl(ep.episode_cut.uri)} />
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                      <span className="text-green-400">✓ Épisode assemblé</span>
+                      <a href={mediaUrl(ep.episode_cut.uri)} download className="text-[#e8c36a] underline">Télécharger la vidéo finale</a>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {ep.scene_plans?.length ? (() => {
               const plan = ep.scene_plans[0];
               return <div className="mt-4 rounded-xl border border-[#2a2e38] bg-[#0b0c10] p-3">
