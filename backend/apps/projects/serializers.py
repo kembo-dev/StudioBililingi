@@ -168,25 +168,52 @@ class EpisodeSerializer(serializers.ModelSerializer):
         beats_qs = segmentation.beats if segmentation else script.beats
         beats = list(beats_qs.order_by("index").prefetch_related("shots__takes"))
         missing = []
+        blockers = []
         total = 0
         locked = 0
         for beat in beats:
             shots = list(beat.shots.order_by("index"))
             if not shots:
-                missing.append(f"Beat {beat.index}: aucun shot")
+                label = f"Beat {beat.index}: aucun shot"
+                missing.append(label)
+                blockers.append({
+                    "beat_id": beat.id,
+                    "beat_index": beat.index,
+                    "shot_id": None,
+                    "shot_index": None,
+                    "take_id": None,
+                    "take_number": None,
+                    "take_status": "missing_shot",
+                    "has_video": False,
+                    "label": label,
+                })
                 continue
             for shot in shots:
                 total += 1
                 take = shot.takes.filter(status=ShotTake.Status.LOCKED).exclude(uri="").order_by("-number").first()
                 if take:
                     locked += 1
-                else:
-                    missing.append(f"Beat {beat.index} / Shot {shot.index}")
+                    continue
+                latest_take = shot.takes.exclude(uri="").order_by("-number").first()
+                label = f"Beat {beat.index} / Shot {shot.index}"
+                missing.append(label)
+                blockers.append({
+                    "beat_id": beat.id,
+                    "beat_index": beat.index,
+                    "shot_id": shot.id,
+                    "shot_index": shot.index,
+                    "take_id": latest_take.id if latest_take else None,
+                    "take_number": latest_take.number if latest_take else None,
+                    "take_status": latest_take.status if latest_take else "missing_take",
+                    "has_video": bool(latest_take and latest_take.uri),
+                    "label": label,
+                })
         return {
             "ready": bool(beats) and total > 0 and not missing,
             "total_shots": total,
             "locked_shots": locked,
             "missing": missing,
+            "blockers": blockers,
         }
 
 
