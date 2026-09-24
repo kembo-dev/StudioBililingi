@@ -276,11 +276,17 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
     if beat.location_id:
         location = {"key": beat.location.key, "name": beat.location.name, "look": beat.location.look}
     props = [{"key": p.key, "name": p.name, "look": p.look} for p in beat.props.all().order_by("key")]
+    from apps.projects.continuity import resolve_ingredients
+    ingredient_pack = resolve_ingredients(beat)
+    canonical_ref_uris = [row.get("uri") for row in ingredient_pack.get("items", []) if row.get("uri")]
+    if not canonical_ref_uris:
+        raise ValueError("Génère d'abord les références canoniques du beat avant son image de scène")
     uri = artist.scene_frame(
         beat_text=beat.text,
         characters=characters,
         location=location,
         props=props,
+        refs=canonical_ref_uris,
         camera=beat.camera if isinstance(beat.camera, dict) else {},
         emotion=beat.emotion,
         project_key=f"{project.id}-{project.slug}",
@@ -306,6 +312,8 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
             "character_keys": [row["key"] for row in characters],
             "location_key": location["key"] if location else None,
             "prop_keys": [row["key"] for row in props],
+            "source_reference_uids": [row.get("reference_uid") for row in ingredient_pack.get("items", []) if row.get("reference_uid")],
+            "source_reference_uris": canonical_ref_uris,
             "visual_style": project.visual_style,
         },
     )
