@@ -233,7 +233,35 @@ class ProductionPipelineTests(TestCase):
         from apps.projects.services import render_shot
         from apps.story.models import Shot, ShotTake
 
-        beat = self._make_renderable_beat()
+        from apps.production.models import Asset
+
+        persist_bible(self.project, {
+            "characters": [{"id": "amina", "name": "Amina", "look": "visage canonique"}],
+            "locations": [{"id": "cuisine", "name": "Cuisine", "look": "cuisine canonique"}],
+            "props": [],
+        })
+        Asset.objects.create(
+            project=self.project,
+            kind=Asset.Kind.IMAGE,
+            role=Asset.Role.CHARACTER_REF,
+            uri="/media/refs/amina.png",
+            meta={"key": "amina"},
+        )
+        Asset.objects.create(
+            project=self.project,
+            kind=Asset.Kind.IMAGE,
+            role=Asset.Role.LOCATION_REF,
+            uri="/media/refs/cuisine.png",
+            meta={"key": "cuisine"},
+        )
+        beat = persist_beats(self.episode, [{
+            "text": "Amina reste assise et regarde la tasse.",
+            "character_ids": ["amina"],
+            "location_id": "cuisine",
+            "scene_index": 1,
+            "duration_seconds": 8,
+            "video_prompt": "Amina remains seated, looking at the cup.",
+        }])[0]
         shot = Shot.objects.create(
             beat=beat,
             index=1,
