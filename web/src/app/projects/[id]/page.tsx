@@ -23,6 +23,7 @@ type Beat = {
   ingredients?: { role?: string; name?: string; uri?: string }[];
   takes: BeatTake[];
   shots: Shot[];
+  scene_frames?: { id: number; uri: string; provider?: string; meta?: { locked?: boolean; custom_prompt?: string } }[];
 };
 type PlannedScene = { index: number; heading: string; summary: string; location_id: string; time_of_day: string; character_ids: string[]; prop_ids: string[]; event_ids: string[]; target_seconds: number };
 type ScenePlan = { id: number; version: number; payload: PlannedScene[]; locked: boolean; created_at: string };
@@ -65,6 +66,7 @@ export default function ProjectPage() {
   const [busy, setBusy] = useState<string>("");
   const [reframe, setReframe] = useState<Record<number, string>>({});
   const [reframeOpen, setReframeOpen] = useState<Record<number, boolean>>({});
+  const [sceneFramePrompts, setSceneFramePrompts] = useState<Record<number, string>>({});
   const [previewRef, setPreviewRef] = useState<Ref | null>(null);
   const [showAddRef, setShowAddRef] = useState(false);
   const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
@@ -594,6 +596,19 @@ export default function ProjectPage() {
                         ))}
                       </div>
                     ) : <p className="text-[11px] text-[#6f7785]">Ce beat raconte l’histoire. Prépare ses shots avant toute génération vidéo.</p>}
+                    <div className="mb-2 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div><p className="text-xs font-medium text-[#e8c36a]">🖼 Image de scène du beat</p><p className="text-[10px] text-[#6f7785]">Master visuel utilisé comme ancre avant la génération vidéo.</p></div>
+                        <button type="button" onClick={() => run(`scene-frame-${beat.id}`, `/api/beats/${beat.id}/generate-scene-frame/`, { prompt: sceneFramePrompts[beat.id] ?? "" })} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a]">{busy === `scene-frame-${beat.id}` ? "Génération…" : beat.scene_frames?.length ? "Régénérer l’image" : "Générer l’image"}</button>
+                      </div>
+                      {beat.scene_frames?.[0] ? <div className="mt-2 space-y-2">
+                        <img src={mediaUrl(beat.scene_frames[0].uri)} alt={`Image de scène beat ${beat.index}`} className="max-h-80 w-full rounded border border-[#2a2e38] object-contain bg-black" />
+                        <div className="flex flex-wrap gap-2">
+                          <input maxLength={4000} value={sceneFramePrompts[beat.id] ?? ""} onChange={(e) => setSceneFramePrompts((cur) => ({ ...cur, [beat.id]: e.target.value }))} placeholder="Reprompter l’image… ex. plan plus serré, pluie légère, lumière chaude, Antoine regarde hors champ" className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]" />
+                          {!beat.scene_frames[0].meta?.locked ? <button type="button" onClick={() => run(`lock-frame-${beat.id}`, `/api/beats/${beat.id}/lock-scene-frame/`, { asset_id: beat.scene_frames?.[0]?.id })} className="rounded border border-green-500/60 px-2 py-1 text-xs text-green-400">{busy === `lock-frame-${beat.id}` ? "…" : "✓ Verrouiller cette image"}</button> : <span className="self-center text-xs text-green-400">✓ Image de scène verrouillée</span>}
+                        </div>
+                      </div> : <p className="mt-2 text-[10px] text-amber-300">Génère puis verrouille une image de scène avant de produire la vidéo de ce beat.</p>}
+                    </div>
                     <div className="rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
                       <button type="button" onClick={() => setReframeOpen((cur) => ({ ...cur, [beat.id]: !cur[beat.id] }))} className="flex w-full items-center justify-between gap-3 text-left">
                         <span><span className="block text-xs font-medium text-[#e8c36a]">🎬 Mise en scène du beat</span><span className="block text-[10px] text-[#6f7785]">Script doctor · intention, continuité, jeu, caméra et son</span></span>
