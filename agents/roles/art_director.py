@@ -60,7 +60,7 @@ class ArtDirector:
             project_key=project_key,
         )
 
-    def scene_frame(self, *, beat_text: str, characters: list[dict], location: dict | None, props: list[dict], camera: dict | None = None, emotion: str = "", project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
+    def scene_frame(self, *, beat_text: str, characters: list[dict], location: dict | None, props: list[dict], refs: list[str] | None = None, camera: dict | None = None, emotion: str = "", project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
         character_text = "; ".join(f"{row.get('name')}: {row.get('look')}" for row in characters) or "No named character"
         prop_text = "; ".join(f"{row.get('name')}: {row.get('look')}" for row in props) or "No important prop"
         location_text = f"{location.get('name')}: {location.get('look')}" if location else "Canonical story location"
@@ -73,6 +73,7 @@ class ArtDirector:
             f"BEAT: {beat_text}. LOCATION: {location_text}. CHARACTERS: {character_text}. PROPS: {prop_text}. "
             f"CAMERA INTENT: {camera or {}}. PERFORMANCE/EMOTION: {emotion or 'natural to the beat'}. "
             f"USER REFINEMENT: {custom_prompt.strip() if custom_prompt.strip() else 'None. Stage the canonical beat professionally.'}",
+            refs=refs or [],
             project_key=project_key,
         )
 
