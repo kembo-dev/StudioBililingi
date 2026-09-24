@@ -1560,7 +1560,13 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
     return shot
 
 
-def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
+def render_shot(
+    shot: Shot,
+    *,
+    adjustment_prompt: str = "",
+    adjustment_reference_uri: str = "",
+    adjustment_mode: str = "custom",
+) -> Shot:
     from agents.backends import get_video
     from apps.production.models import Asset
     from apps.projects.continuity import shot_render_package
@@ -1590,6 +1596,8 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
             "language_locked": bool(shot.beat.dialogue),
             "dialogue_language_policy": "exact_original_language",
             "adjustment_prompt": str(adjustment_prompt or "").strip(),
+            "adjustment_mode": str(adjustment_mode or "custom"),
+            "adjustment_reference_uri": str(adjustment_reference_uri or "").strip() or None,
             "previous_take_frame": None,
         },
     )
@@ -1599,8 +1607,8 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
     project = package["project"]
     project_key = f"{project.id}-{project.slug}"
     previous_take = package.get("previous_take")
-    baseline_frame = None
-    if str(adjustment_prompt or "").strip() and previous_take and previous_take.get("uri"):
+    baseline_frame = str(adjustment_reference_uri or "").strip() or None
+    if not baseline_frame and str(adjustment_prompt or "").strip() and previous_take and previous_take.get("uri"):
         # For a re-adjustment, extract a real frame from the previous take so
         # the new generation is visually anchored to the take being revised.
         # This is kept separate from Veo asset references because Veo cannot
@@ -1613,7 +1621,11 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
         except (AttributeError, RuntimeError, ValueError):
             baseline_frame = None
     if baseline_frame:
-        take.generation_meta = {**(take.generation_meta or {}), "previous_take_frame": baseline_frame}
+        take.generation_meta = {
+            **(take.generation_meta or {}),
+            "previous_take_frame": baseline_frame if not adjustment_reference_uri else None,
+            "adjustment_reference_uri": str(adjustment_reference_uri or "").strip() or None,
+        }
         take.save(update_fields=["generation_meta"])
     try:
         uri = backend.render(
