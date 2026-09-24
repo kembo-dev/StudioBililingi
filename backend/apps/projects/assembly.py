@@ -7,6 +7,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import urlretrieve
 
+from django.conf import settings
+
 from apps.production.models import Asset
 from apps.story.models import Episode, ShotTake
 
@@ -15,6 +17,8 @@ def _local_clip(uri: str, directory: str, index: int) -> str:
     parsed = urlparse(uri)
     if parsed.scheme in ("", "file"):
         path = parsed.path if parsed.scheme == "file" else uri
+        if str(path).startswith("/media/"):
+            path = os.path.join(str(settings.MEDIA_ROOT), str(path)[len("/media/"):])
         if not os.path.exists(path):
             raise ValueError(f"Clip introuvable: {uri}")
         return os.path.abspath(path)
@@ -49,8 +53,9 @@ def assemble_episode(episode: Episode) -> Asset:
             locked.append((beat, shot, take))
 
     project = episode.season.project
-    media_root = os.environ.get("STUDIO_MEDIA_ROOT", "/tmp/studiobililingi-media")
-    output_dir = os.path.join(media_root, f"project-{project.id}", f"episode-{episode.id}")
+    media_root = str(settings.MEDIA_ROOT)
+    relative_dir = os.path.join("episodes", f"{project.id}-{project.slug}", f"episode-{episode.id}")
+    output_dir = os.path.join(media_root, relative_dir)
     os.makedirs(output_dir, exist_ok=True)
     output = os.path.join(output_dir, "final.mp4")
 
@@ -65,7 +70,7 @@ def assemble_episode(episode: Episode) -> Asset:
 
     return Asset.objects.create(
         project=project, kind=Asset.Kind.VIDEO, role=Asset.Role.EPISODE_CUT,
-        uri=f"file://{output}", provider="ffmpeg",
+        uri=f"/media/{relative_dir.replace(os.sep, '/')}/final.mp4", provider="ffmpeg",
         meta={
             "episode_id": episode.id, "script_id": latest_script.id,
             "segmentation_id": segmentation.id if segmentation else None,
