@@ -201,19 +201,29 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     previous_take = shot.takes.exclude(uri="").order_by("-number").first()
 
     lines = [
+        "VISUAL ACTION ONLY - NEVER SPEAK OR NARRATE THIS TEXT:",
         shot.video_prompt or shot.text,
         "",
         continuity_prompt(beat, context),
         "",
         "SHOT LOCK:",
-        f"Render only this shot action: {shot.text}",
+        f"Render visually only this shot action: {shot.text}",
+        "The action/description text is silent directing metadata. It must NEVER be spoken, narrated, read aloud, lip-synced, or turned into dialogue by any character or off-screen voice.",
         "Do not add, translate, paraphrase or replace spoken dialogue.",
     ]
     if beat.dialogue:
         lines.extend([
-            f'CANONICAL SPOKEN DIALOGUE: "{beat.dialogue}"',
+            "SPEECH MODE: DIALOGUE ONLY.",
+            f'ONLY ALLOWED SPOKEN WORDS: "{beat.dialogue}"',
+            "No narration, no description, no extra words before or after the canonical dialogue.",
             "LANGUAGE LOCK: speak the canonical dialogue exactly in its original language. "
             "Do not translate it to English or to any other language.",
+        ])
+    else:
+        lines.extend([
+            "SPEECH MODE: SILENT.",
+            "There is NO spoken dialogue in this shot. No character and no off-screen voice may speak or narrate anything.",
+            "Use only visual acting and natural non-verbal ambience appropriate to the scene.",
         ])
     speaker = context.get("speaker")
     if speaker:
