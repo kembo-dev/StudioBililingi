@@ -8,7 +8,7 @@ import { api, mediaUrl } from "@/lib/api";
 
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
 type GenerationIngredient = { role?: string; key?: string; reference_uid?: string; uri?: string; name?: string };
-type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; previous_take_frame?: string | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string } };
+type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; previous_take_frame?: string | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string; adjustment_mode?: string; adjustment_reference_uri?: string | null } };
 type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; reference_uids?: string[]; status: string; clip_uri?: string | null; takes: ShotTake[] };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
@@ -73,6 +73,8 @@ export default function ProjectPage() {
   const [refPrompt, setRefPrompt] = useState("");
   const [shotJobs, setShotJobs] = useState<Record<number, Job>>({});
   const [shotAdjustments, setShotAdjustments] = useState<Record<number, string>>({});
+  const [shotAdjustmentRefs, setShotAdjustmentRefs] = useState<Record<number, { uri: string; name: string }>>({});
+  const [shotAdjustmentModes, setShotAdjustmentModes] = useState<Record<number, "custom" | "language" | "script">>({});
 
   async function load() {
     setProject(await api<Project>(`/api/projects/${params.id}/`));
@@ -115,6 +117,25 @@ export default function ProjectPage() {
     }
   }
 
+  async function uploadShotAdjustmentRef(shotId: number, file: File) {
+    const key = `upload-shot-ref-${shotId}`;
+    setBusy(key);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const uploaded = await api<{ uri: string; name: string }>(`/api/shots/${shotId}/upload-adjustment-reference/`, {
+        method: "POST",
+        body: form,
+      });
+      setShotAdjustmentRefs((current) => ({ ...current, [shotId]: uploaded }));
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function generateShotTake(shotId: number) {
     const key = `render-shot-${shotId}`;
     setBusy(key);
@@ -122,7 +143,11 @@ export default function ProjectPage() {
     try {
       const response = await api<{ job_id: number; status: Job["status"] }>(`/api/shots/${shotId}/render/`, {
         method: "POST",
-        body: JSON.stringify({ prompt: shotAdjustments[shotId] ?? "" }),
+        body: JSON.stringify({
+          prompt: shotAdjustments[shotId] ?? "",
+          adjustment_reference_uri: shotAdjustmentRefs[shotId]?.uri ?? "",
+          adjustment_mode: shotAdjustmentModes[shotId] ?? "custom",
+        }),
       });
       let job = await api<Job>(`/api/jobs/${response.job_id}/`);
       setShotJobs((current) => ({ ...current, [shotId]: job }));
@@ -466,15 +491,60 @@ export default function ProjectPage() {
                                 </div>
                               </div>
                             ) : <p className="mt-2 text-[10px] text-red-300">Aucune référence verrouillée sur ce shot.</p>}
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <input
-                                maxLength={4000}
-                                value={shotAdjustments[shot.id] ?? ""}
-                                onChange={(e) => setShotAdjustments((current) => ({ ...current, [shot.id]: e.target.value }))}
-                                placeholder="Réajuster le prochain take… ex. caméra plus proche, jeu plus retenu, lumière plus chaude"
-                                className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#0b0c10] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]"
-                              />
-                              <span className="self-center text-[10px] text-[#6f7785]">Identité, refs, langue et dialogue restent verrouillés.</span>
+                            <div className="mt-2 space-y-2 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
+                              <div className="flex flex-wrap gap-2">
+                                <input
+                                  maxLength={4000}
+                                  value={shotAdjustments[shot.id] ?? ""}
+                                  onChange={(e) => {
+                                    setShotAdjustmentModes((current) => ({ ...current, [shot.id]: "custom" }));
+                                    setShotAdjustments((current) => ({ ...current, [shot.id]: e.target.value }));
+                                  }}
+                                  placeholder="Réajuster le prochain take… ex. caméra plus proche, jeu plus retenu, lumière plus chaude"
+                                  className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]"
+                                />
+                                <label className="cursor-pointer rounded border border-[#2a2e38] px-2 py-1 text-xs text-[#e8c36a]">
+                                  {busy === `upload-shot-ref-${shot.id}` ? "Ajout…" : "📎 Ajouter une référence"}
+                                  <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) uploadShotAdjustmentRef(shot.id, file);
+                                      e.currentTarget.value = "";
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setShotAdjustmentModes((current) => ({ ...current, [shot.id]: "language" }))}
+                                  className={`rounded border px-2 py-1 text-[11px] ${shotAdjustmentModes[shot.id] === "language" ? "border-green-400 text-green-400" : "border-[#2a2e38] text-[#9aa3b2]"}`}
+                                >
+                                  🌐 Corriger la langue
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShotAdjustmentModes((current) => ({ ...current, [shot.id]: "script" }))}
+                                  className={`rounded border px-2 py-1 text-[11px] ${shotAdjustmentModes[shot.id] === "script" ? "border-green-400 text-green-400" : "border-[#2a2e38] text-[#9aa3b2]"}`}
+                                >
+                                  📝 Recaler sur le script
+                                </button>
+                                {(shotAdjustmentModes[shot.id] === "language" || shotAdjustmentModes[shot.id] === "script") ? <span className="self-center text-[10px] text-green-400">✓ correction automatique sélectionnée pour le prochain take</span> : null}
+                              </div>
+                              {shotAdjustmentRefs[shot.id] ? (
+                                <div className="flex flex-wrap items-center gap-2 rounded border border-[#2a2e38] bg-[#14161c] p-2 text-[10px]">
+                                  <img src={mediaUrl(shotAdjustmentRefs[shot.id].uri)} alt="Référence de réajustement" className="h-16 w-16 rounded object-cover" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[#e8c36a]">Référence jointe au prochain take</p>
+                                    <p className="truncate text-[#9aa3b2]">{shotAdjustmentRefs[shot.id].name}</p>
+                                  </div>
+                                  <button type="button" onClick={() => setShotAdjustmentRefs((current) => { const next = { ...current }; delete next[shot.id]; return next; })} className="text-red-300">Retirer</button>
+                                </div>
+                              ) : null}
+                              <span className="text-[10px] text-[#6f7785]">Identité, refs canoniques, continuité, langue et dialogue restent verrouillés. La pièce jointe sert d’ancre visuelle au nouveau take.</span>
                             </div>
                             {shot.clip_uri ? <video controls className="mt-2 max-h-64 w-full rounded bg-black" src={mediaUrl(shot.clip_uri)} /> : null}
                             {shot.takes?.length ? <div className="mt-2 flex flex-wrap gap-2">{shot.takes.map((take) => (
