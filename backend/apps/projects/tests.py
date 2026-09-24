@@ -219,6 +219,15 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(beat.emotion, "tension")
         self.assertEqual(beat.dialogue, "Allo ?")
 
+    def test_veo_reference_shot_durations_are_always_eight_seconds(self):
+        from apps.projects.services import _veo_shot_durations
+
+        self.assertEqual(_veo_shot_durations(1), [8])
+        self.assertEqual(_veo_shot_durations(6), [8])
+        self.assertEqual(_veo_shot_durations(8), [8])
+        self.assertEqual(_veo_shot_durations(9), [8, 8])
+        self.assertEqual(_veo_shot_durations(20), [8, 8, 8])
+
     def test_shot_review_locks_exact_take(self):
         beat = persist_beats(self.episode, [{"text": "Beat narratif", "duration_seconds": 12}])[0]
         shot = plan_beat_shots(beat)[0]
