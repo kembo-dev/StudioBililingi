@@ -1501,6 +1501,10 @@ def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
     for index, (seconds, row) in enumerate(zip(durations, rows), start=1):
         shot_text = str(row.get("text") or "").strip()
         video_prompt = str(row.get("video_prompt") or "").strip()
+        # A planner may intentionally use a reaction/continuity shot without
+        # repeating narrative text. The visual prompt is still valid content.
+        if not shot_text and video_prompt:
+            shot_text = video_prompt
         if not shot_text:
             raise ValueError(f"Shot Planner invalide: shot {index} sans contenu")
         # A silent visual shot may legitimately omit video_prompt. In that case
