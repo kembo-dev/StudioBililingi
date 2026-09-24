@@ -1599,6 +1599,7 @@ def render_shot(
             "adjustment_mode": str(adjustment_mode or "custom"),
             "adjustment_reference_uri": str(adjustment_reference_uri or "").strip() or None,
             "previous_take_frame": None,
+            "scene_frame": package.get("scene_frame"),
         },
     )
     backend = get_video()
@@ -1607,7 +1608,10 @@ def render_shot(
     project = package["project"]
     project_key = f"{project.id}-{project.slug}"
     previous_take = package.get("previous_take")
+    scene_frame = package.get("scene_frame") or {}
     baseline_frame = str(adjustment_reference_uri or "").strip() or None
+    if not baseline_frame and not str(adjustment_prompt or "").strip():
+        baseline_frame = str(scene_frame.get("uri") or "").strip() or None
     if not baseline_frame and str(adjustment_prompt or "").strip() and previous_take and previous_take.get("uri"):
         # For a re-adjustment, extract a real frame from the previous take so
         # the new generation is visually anchored to the take being revised.
