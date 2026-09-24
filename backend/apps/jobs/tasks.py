@@ -22,7 +22,12 @@ def run_studio_job(self, job_id: int) -> dict:
         if job.kind == Job.Kind.VIDEO:
             if payload.get("shot_id"):
                 shot = Shot.objects.get(pk=payload["shot_id"])
-                render_shot(shot, adjustment_prompt=payload.get("adjustment_prompt", ""))
+                render_shot(
+                    shot,
+                    adjustment_prompt=payload.get("adjustment_prompt", ""),
+                    adjustment_reference_uri=payload.get("adjustment_reference_uri", ""),
+                    adjustment_mode=payload.get("adjustment_mode", "custom"),
+                )
                 job.result = {"beat_id": shot.beat_id, "shot_id": shot.id, "status": shot.status}
             else:
                 # Legacy jobs remain executable during the migration window.
