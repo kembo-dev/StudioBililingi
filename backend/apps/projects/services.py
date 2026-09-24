@@ -1090,6 +1090,44 @@ def _validate_segmented_beats(chunks: list, *, form: str, project: Project, scen
         raise ValueError(f"Segmentation refusée après correction automatique: {preview}.")
 
 
+def _canonical_scene_plan_ids(scenes: list[dict], project: Project) -> list[dict]:
+    """Resolve common LLM aliases/names to the exact canonical Bible keys."""
+    def norm(value) -> str:
+        return re.sub(r"[^a-z0-9]+", "", slugify(str(value or "")).replace("-", ""))
+
+    def aliases(qs):
+        result = {}
+        for entity in qs:
+            for value in (entity.key, entity.name):
+                token = norm(value)
+                if token:
+                    result[token] = entity.key
+        return result
+
+    location_aliases = aliases(project.locations.all())
+    character_aliases = aliases(project.characters.all())
+    prop_aliases = aliases(project.props.all())
+
+    def resolve(value, mapping):
+        raw = str(value or "").strip()
+        if not raw:
+            return raw
+        return mapping.get(norm(raw), raw)
+
+    normalized = []
+    for source in scenes:
+        scene = dict(source)
+        scene["location_id"] = resolve(scene.get("location_id"), location_aliases)
+        scene["character_ids"] = [
+            resolve(value, character_aliases) for value in (scene.get("character_ids") or [])
+        ]
+        scene["prop_ids"] = [
+            resolve(value, prop_aliases) for value in (scene.get("prop_ids") or [])
+        ]
+        normalized.append(scene)
+    return normalized
+
+
 def _scene_plan_errors(
     scenes: list[dict],
     *,
@@ -1191,6 +1229,7 @@ def plan_scenes(episode: Episode, script_text: str, *, persist: bool = True) -> 
     scenes = [dict(scene) for scene in (scenes or []) if isinstance(scene, dict)]
     if not scenes:
         raise RuntimeError("Le Scene Planner n'a retourné aucune scène exploitable")
+    scenes = _canonical_scene_plan_ids(scenes, project)
     errors = _scene_plan_errors(
         scenes,
         project=project,
