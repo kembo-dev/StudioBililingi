@@ -299,8 +299,29 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
     def assemble(self, request, pk=None):
         from apps.jobs.models import Job
         from apps.jobs.queue import enqueue, is_eager
+        from apps.projects.assembly import assemble_episode
 
         episode = self.get_object()
+        # Validate the complete locked-shot timeline before creating a queue job.
+        # This gives the editor an immediate, precise error instead of spending a
+        # worker slot on an episode that cannot yet be assembled.
+        try:
+            if not is_eager():
+                latest_script = episode.scripts.order_by("-version").first()
+                if latest_script is None:
+                    raise ValueError("Aucun script à assembler")
+                segmentation = latest_script.segmentations.order_by("-version").first()
+                beats_qs = segmentation.beats if segmentation else latest_script.beats
+                from apps.story.models import ShotTake
+                for beat in beats_qs.order_by("index").prefetch_related("shots__takes"):
+                    shots = list(beat.shots.order_by("index"))
+                    if not shots:
+                        raise ValueError(f"Beat {beat.index}: aucun shot de production")
+                    for shot in shots:
+                        if not shot.takes.filter(status=ShotTake.Status.LOCKED).exclude(uri="").exists():
+                            raise ValueError(f"Beat {beat.index} / Shot {shot.index}: aucun take verrouillé")
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         job = enqueue(
             project=episode.season.project,
             kind=Job.Kind.ASSEMBLY,
