@@ -64,6 +64,7 @@ export default function ProjectPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [reframe, setReframe] = useState<Record<number, string>>({});
+  const [reframeOpen, setReframeOpen] = useState<Record<number, boolean>>({});
   const [previewRef, setPreviewRef] = useState<Ref | null>(null);
   const [showAddRef, setShowAddRef] = useState(false);
   const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
@@ -593,19 +594,19 @@ export default function ProjectPage() {
                         ))}
                       </div>
                     ) : <p className="text-[11px] text-[#6f7785]">Ce beat raconte l’histoire. Prépare ses shots avant toute génération vidéo.</p>}
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        className="min-w-48 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none"
-                        placeholder="Recadrer ce beat… ex. Marc décroche à 03h14, la voix parle du pont"
-                        value={reframe[beat.id] ?? ""}
-                        onChange={(e) => setReframe((cur) => ({ ...cur, [beat.id]: e.target.value }))}
-                      />
-                      <button
-                        onClick={() => run(`rw-${beat.id}`, `/api/beats/${beat.id}/recontextualize/`, { prompt: reframe[beat.id] ?? "" })}
-                        className="rounded border border-[#e8c36a] px-2 py-0.5 text-xs text-[#e8c36a]"
-                      >
-                        {busy === `rw-${beat.id}` ? "\u2026" : "Recadrer"}
+                    <div className="rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
+                      <button type="button" onClick={() => setReframeOpen((cur) => ({ ...cur, [beat.id]: !cur[beat.id] }))} className="flex w-full items-center justify-between gap-3 text-left">
+                        <span><span className="block text-xs font-medium text-[#e8c36a]">🎬 Mise en scène du beat</span><span className="block text-[10px] text-[#6f7785]">Script doctor · intention, continuité, jeu, caméra et son</span></span>
+                        <span className="text-xs text-[#9aa3b2]">{reframeOpen[beat.id] ? "Fermer" : "Améliorer"}</span>
                       </button>
+                      {reframeOpen[beat.id] ? <div className="mt-3 space-y-2">
+                        <div className="rounded border border-[#2a2e38] bg-[#14161c] p-2"><p className="text-[10px] uppercase tracking-wide text-[#6f7785]">Beat canonique</p><p className="mt-1 text-xs text-[#c8cdd6]">{beat.text}</p></div>
+                        <textarea rows={3} maxLength={4000} className="w-full rounded border border-[#2a2e38] bg-[#14161c] px-2 py-2 text-xs outline-none focus:border-[#e8c36a]" placeholder="Intention de réalisation… ex. tension plus contenue, révéler le malaise par le regard, travelling lent vers le visage, garder exactement la réplique." value={reframe[beat.id] ?? ""} onChange={(e) => setReframe((cur) => ({ ...cur, [beat.id]: e.target.value }))} />
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="max-w-2xl text-[10px] text-[#6f7785]">Analyse le rôle dramatique du beat, préserve l’histoire et les dialogues canoniques, puis propose une version filmable cohérente avec la Bible.</p>
+                          <button type="button" disabled={!reframe[beat.id]?.trim() || busy === `rw-${beat.id}`} onClick={() => run(`rw-${beat.id}`, `/api/beats/${beat.id}/recontextualize/`, { prompt: reframe[beat.id] ?? "" })} className="rounded border border-[#e8c36a] px-3 py-1 text-xs text-[#e8c36a] disabled:opacity-40">{busy === `rw-${beat.id}` ? "Analyse…" : "Proposer une mise en scène"}</button>
+                        </div>
+                      </div> : null}
                     </div>
                   </li>
                 ))}
