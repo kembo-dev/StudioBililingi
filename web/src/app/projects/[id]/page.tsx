@@ -8,7 +8,7 @@ import { api, mediaUrl } from "@/lib/api";
 
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
 type GenerationIngredient = { role?: string; key?: string; reference_uid?: string; uri?: string; name?: string };
-type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string } };
+type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; previous_take_frame?: string | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string } };
 type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; reference_uids?: string[]; status: string; clip_uri?: string | null; takes: ShotTake[] };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
@@ -463,6 +463,21 @@ export default function ProjectPage() {
                                         </div>
                                       ))}
                                       {take.generation_meta.previous_take?.number ? <p className="text-[10px] text-[#9aa3b2]">Baseline · Take {take.generation_meta.previous_take.number}</p> : null}
+                                      {take.generation_meta.previous_take_frame ? (
+                                        <div className="rounded border border-[#2a2e38] bg-[#0b0c10] p-2">
+                                          <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px]">
+                                            <span className="font-medium text-[#e8c36a]">Ancre visuelle du réajustement</span>
+                                            <span className="text-green-400">✓ frame du take précédent envoyée à Veo</span>
+                                          </div>
+                                          <img
+                                            src={mediaUrl(take.generation_meta.previous_take_frame)}
+                                            alt={`Frame d’ancrage du Take ${take.generation_meta.previous_take?.number ?? ""}`}
+                                            className="max-h-48 w-auto rounded border border-[#2a2e38] object-contain"
+                                          />
+                                        </div>
+                                      ) : take.generation_meta.adjustment_prompt && take.generation_meta.previous_take?.number ? (
+                                        <p className="text-[10px] text-amber-300">⚠ Réajustement sans frame d’ancrage du take précédent.</p>
+                                      ) : null}
                                       {take.generation_meta.language_locked ? <p className="text-[10px] text-green-400">✓ Langue/dialogue verrouillés · {take.generation_meta.dialogue_language_policy ?? "langue originale"}</p> : null}
                                       {take.generation_meta.adjustment_prompt ? <p className="text-[10px] text-[#9aa3b2]">Réajustement · {take.generation_meta.adjustment_prompt}</p> : null}
                                     </div>
