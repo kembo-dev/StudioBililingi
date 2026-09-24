@@ -1294,7 +1294,10 @@ def _beat_scene_plan_errors(chunks: list[dict], scene_plan: list[dict]) -> list[
             errors.append(f"beat {position}: scène {scene_index} absente du Scene Plan")
             continue
         location_id = str(row.get("location_id") or "").strip()
-        if location_id != scene["location_id"]:
+        # Both the Scene Plan and segmenter may vary only in casing while
+        # referring to the same canonical key. Compare canonical identifiers
+        # case-insensitively; persist_beats resolves the actual DB entity.
+        if location_id.casefold() != scene["location_id"].casefold():
             errors.append(
                 f"beat {position}: location_id {location_id or 'vide'} différent du Scene Plan {scene['location_id']}"
             )
