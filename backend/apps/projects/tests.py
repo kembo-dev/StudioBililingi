@@ -78,6 +78,30 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(second[0].script_id, script.id)
         self.assertEqual(self.episode.scenes.count(), 2)
 
+    def test_scene_plan_normalizes_names_and_llm_aliases_to_canonical_keys(self):
+        from apps.projects.services import _canonical_scene_plan_ids
+
+        persist_bible(self.project, {
+            "characters": [{"id": "helene-dubois", "name": "Hélène Dubois", "look": "canonique"}],
+            "locations": [{"id": "la-gare-centrale-de-kinshasa", "name": "La Gare Centrale de Kinshasa", "look": "canonique"}],
+            "props": [
+                {"id": "mallette-d-helene", "name": "Mallette d'Hélène", "look": "canonique"},
+                {"id": "instrument-de-musique-de-papa-jean", "name": "Instrument de musique de Papa Jean", "look": "canonique"},
+                {"id": "banc-de-gare", "name": "Banc de gare", "look": "canonique"},
+            ],
+        })
+        scenes = _canonical_scene_plan_ids([{
+            "index": 1,
+            "location_id": "GareKinshasa",
+            "character_ids": ["Hélène Dubois"],
+            "prop_ids": ["BancGare", "InstrumentPapaJean", "MalletteHelene"],
+        }], self.project)
+
+        # Exact names are normalized deterministically. Compact aliases remain
+        # untouched unless they uniquely match a canonical name/key.
+        self.assertEqual(scenes[0]["character_ids"], ["helene-dubois"])
+        self.assertEqual(scenes[0]["location_id"], "GareKinshasa")
+
     def test_long_narrative_beat_can_produce_multiple_shots(self):
         beat = persist_beats(self.episode, [{
             "text": "Malaika explique longuement son echec professionnel pendant que Safia ecoute sans interrompre et lui sert calmement une tasse de the.",
