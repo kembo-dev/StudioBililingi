@@ -148,9 +148,14 @@ class GoogleImageBackend:
         model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
         client = _client()
         try:
+            contents = [prompt]
+            for uri in (refs or []):
+                image = _video_reference_image(types, uri) if _usable(uri) else None
+                if image is not None:
+                    contents.append(image)
             response = _with_quota_retry(lambda: client.models.generate_content(
                 model=model,
-                contents=prompt,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     response_modalities=["IMAGE"],
                 ),
