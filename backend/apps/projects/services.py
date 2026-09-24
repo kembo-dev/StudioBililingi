@@ -1590,6 +1590,7 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
             "language_locked": bool(shot.beat.dialogue),
             "dialogue_language_policy": "exact_original_language",
             "adjustment_prompt": str(adjustment_prompt or "").strip(),
+            "previous_take_frame": None,
         },
     )
     backend = get_video()
@@ -1597,11 +1598,28 @@ def render_shot(shot: Shot, *, adjustment_prompt: str = "") -> Shot:
     take.save(update_fields=["backend"])
     project = package["project"]
     project_key = f"{project.id}-{project.slug}"
+    previous_take = package.get("previous_take")
+    baseline_frame = None
+    if str(adjustment_prompt or "").strip() and previous_take and previous_take.get("uri"):
+        # For a re-adjustment, extract a real frame from the previous take so
+        # the new generation is visually anchored to the take being revised.
+        # This is kept separate from Veo asset references because Veo cannot
+        # combine reference_images with a source/start image in one request.
+        try:
+            baseline_frame = backend.extract_reference_frame(
+                previous_take["uri"],
+                project_key=project_key,
+            )
+        except (AttributeError, RuntimeError, ValueError):
+            baseline_frame = None
+    if baseline_frame:
+        take.generation_meta = {**(take.generation_meta or {}), "previous_take_frame": baseline_frame}
+        take.save(update_fields=["generation_meta"])
     try:
         uri = backend.render(
             prompt,
-            start_frame=pack["start_frame"],
-            ingredients=pack["uris"],
+            start_frame=baseline_frame or pack["start_frame"],
+            ingredients=[] if baseline_frame else pack["uris"],
             duration_seconds=float(shot.duration_seconds),
             aspect_ratio=project.aspect_ratio,
             project_key=project_key,
