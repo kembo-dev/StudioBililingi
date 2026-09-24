@@ -228,6 +228,49 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(_veo_shot_durations(9), [8, 8])
         self.assertEqual(_veo_shot_durations(20), [8, 8, 8])
 
+    def test_adjusted_take_uses_previous_take_frame_instead_of_asset_refs(self):
+        from unittest.mock import patch
+        from apps.projects.services import render_shot
+        from apps.story.models import Shot, ShotTake
+
+        beat = self._make_renderable_beat()
+        shot = Shot.objects.create(
+            beat=beat,
+            index=1,
+            text="Amina reste assise et regarde la tasse.",
+            duration_seconds=8,
+            video_prompt="Amina remains seated, looking at the cup.",
+        )
+        ShotTake.objects.create(
+            shot=shot,
+            number=1,
+            uri="/media/clips/previous.mp4",
+            status=ShotTake.Status.REVIEW,
+        )
+
+        class FakeVideo:
+            provider_id = "fake-veo"
+
+            def extract_reference_frame(self, uri, *, project_key=None):
+                self.previous_uri = uri
+                return "/media/take-frames/previous.jpg"
+
+            def render(self, prompt, **kwargs):
+                self.prompt = prompt
+                self.kwargs = kwargs
+                return "/media/clips/adjusted.mp4"
+
+        backend = FakeVideo()
+        with patch("agents.backends.get_video", return_value=backend):
+            render_shot(shot, adjustment_prompt="caméra plus proche")
+
+        take = shot.takes.order_by("-number").first()
+        self.assertEqual(backend.previous_uri, "/media/clips/previous.mp4")
+        self.assertEqual(backend.kwargs["start_frame"], "/media/take-frames/previous.jpg")
+        self.assertEqual(backend.kwargs["ingredients"], [])
+        self.assertEqual(take.generation_meta["previous_take_frame"], "/media/take-frames/previous.jpg")
+        self.assertIn("caméra plus proche", take.prompt)
+
     def test_shot_review_locks_exact_take(self):
         beat = persist_beats(self.episode, [{"text": "Beat narratif", "duration_seconds": 12}])[0]
         shot = plan_beat_shots(beat)[0]
