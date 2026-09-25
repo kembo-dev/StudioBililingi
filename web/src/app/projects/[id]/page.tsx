@@ -24,6 +24,7 @@ type Beat = {
   takes: BeatTake[];
   shots: Shot[];
   scene_frames?: { id: number; uri: string; provider?: string; meta?: { locked?: boolean; custom_prompt?: string } }[];
+  usage?: { prompt_tokens_estimated: number; video_generations: number; video_seconds_requested: number; video_seconds_successful: number };
 };
 type PlannedScene = { index: number; heading: string; summary: string; location_id: string; time_of_day: string; character_ids: string[]; prop_ids: string[]; event_ids: string[]; target_seconds: number };
 type ScenePlan = { id: number; version: number; payload: PlannedScene[]; locked: boolean; created_at: string };
@@ -537,6 +538,13 @@ export default function ProjectPage() {
               <ol className="mt-3 space-y-2">
                 {ep.beats.map((beat) => (
                   <li id={`beat-${beat.id}`} key={beat.id} className="scroll-mt-6 space-y-2 rounded-lg bg-[#0b0c10] px-3 py-2 text-sm">
+                    {beat.usage && (beat.usage.video_generations > 0 || beat.usage.prompt_tokens_estimated > 0) ? (
+                      <div className="flex flex-wrap gap-2 text-[10px] text-[#9aa3b2]">
+                        <span className="rounded border border-[#2a2e38] px-2 py-1">≈ {beat.usage.prompt_tokens_estimated.toLocaleString()} tokens prompt</span>
+                        <span className="rounded border border-[#2a2e38] px-2 py-1">{beat.usage.video_generations} génération(s) vidéo</span>
+                        <span className="rounded border border-[#2a2e38] px-2 py-1">{beat.usage.video_seconds_requested.toFixed(0)}s vidéo demandées</span>
+                      </div>
+                    ) : null}
                     <p>
                       <span className="mr-2 text-[#e8c36a]">{String(beat.index + 1).padStart(2, "0")} \u00b7 {beat.word_count} mots \u00b7 {beat.status}</span>
                       {beat.text}
