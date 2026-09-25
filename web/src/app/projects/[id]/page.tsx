@@ -38,7 +38,7 @@ type Episode = {
   scenes: Scene[];
   scene_plans: ScenePlan[];
   episode_cut?: { id: number; uri: string; provider: string; meta?: Record<string, unknown> } | null;
-  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; total_beats?: number; locked_beats?: number; missing: string[]; beat_progress?: { beat_id: number; beat_index: number; total_shots: number; locked_shots: number; status: "locked" | "needs_revision" | "in_progress" | "not_prepared" }[]; blockers?: { beat_id: number; beat_index: number; shot_id: number | null; shot_index: number | null; take_id: number | null; take_number: number | null; take_status: string; has_video: boolean; reason?: string; feedback?: string; label: string }[] };
+  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; total_beats?: number; locked_beats?: number; beat_indexes_need_normalization?: boolean; beat_index_sequence?: number[]; missing: string[]; beat_progress?: { beat_id: number; beat_index: number; total_shots: number; locked_shots: number; status: "locked" | "needs_revision" | "in_progress" | "not_prepared" }[]; blockers?: { beat_id: number; beat_index: number; shot_id: number | null; shot_index: number | null; take_id: number | null; take_number: number | null; take_status: string; has_video: boolean; reason?: string; feedback?: string; label: string }[] };
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; key: string; name: string; look: string };
@@ -431,6 +431,17 @@ export default function ProjectPage() {
                   </div>
                   {ep.assembly_readiness?.ready ? <span className="text-xs text-green-400">✓ prêt à assembler</span> : <span className="text-xs text-amber-300">Verrouille tous les takes avant l’assemblage</span>}
                 </div>
+                {ep.assembly_readiness?.beat_indexes_need_normalization ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400/40 bg-amber-400/5 p-3">
+                    <div>
+                      <p className="text-xs font-medium text-amber-300">Ancienne numérotation de beats détectée</p>
+                      <p className="text-[10px] text-[#9aa3b2]">Répare uniquement les index. Les beats, shots, takes, refs et médias conservent leurs identifiants.</p>
+                    </div>
+                    <button type="button" onClick={() => run(`normalize-beats-${ep.id}`, `/api/episodes/${ep.id}/normalize-beat-indexes/`)} className="rounded border border-amber-400/60 px-3 py-1 text-xs text-amber-300">
+                      {busy === `normalize-beats-${ep.id}` ? "Réparation…" : "Réparer la numérotation"}
+                    </button>
+                  </div>
+                ) : null}
                 {ep.assembly_readiness?.beat_progress?.length ? (
                   <div className="mt-3 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
