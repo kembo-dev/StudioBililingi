@@ -9,7 +9,7 @@ class ShotPlanner:
     role = "shot_planner"
 
     def __init__(self):
-        self.text = get_text()
+        self.text = get_text(role=self.role)
 
     def plan(self, *, beat: dict, durations: list[int], bible: dict | None = None) -> dict:
         return self.text.generate_json(
