@@ -183,6 +183,29 @@ def resolve_ingredients(beat: Beat, *, reference_uids: list[str] | None = None) 
     }
 
 
+def _veo_safe_visual_action(shot) -> str:
+    """Keep child/school scenes visually equivalent while avoiding ambiguous dressing imagery."""
+    beat = shot.beat
+    raw = str(shot.video_prompt or shot.text or "").strip()
+    corpus = " ".join([
+        raw,
+        str(shot.text or ""),
+        str(beat.text or ""),
+        " ".join(str(character.look or "") for character in beat.characters.all()),
+    ]).lower()
+    child_markers = ("jeune élève", "jeune eleve", "garçon", "garcon", "fille", "enfant", "écolier", "ecolier", "élève", "eleve")
+    dressing_markers = ("enfil", "s'habill", "se rhabill", "déshabill", "deshabill", "met son uniforme", "mettre son uniforme")
+    if any(x in corpus for x in child_markers) and any(x in corpus for x in dressing_markers):
+        return (
+            "A school student is already fully dressed in the complete school uniform. "
+            "In a normal family morning routine, the student stands beside the prepared bed, "
+            "neatly adjusts the collar and sleeves of the uniform, then picks up the school bag. "
+            "Wholesome educational context; ordinary age-appropriate school preparation. "
+            "No dressing or undressing is shown."
+        )
+    return raw
+
+
 def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     """Reuse the Beat's canonical refs/voice while applying the Shot's visual action."""
     beat = shot.beat
@@ -202,6 +225,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     previous_take = shot.takes.exclude(uri="").order_by("-number").first()
 
     adjustment = str(adjustment_prompt or "").strip()
+    visual_action = _veo_safe_visual_action(shot)
     lines = []
     if adjustment:
         lines.extend([
@@ -212,12 +236,12 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         ])
     lines.extend([
         "VISUAL ACTION ONLY - NEVER SPEAK OR NARRATE THIS TEXT:",
-        shot.video_prompt or shot.text,
+        visual_action,
         "",
         continuity_prompt(beat, context),
         "",
         "SHOT LOCK:",
-        f"Render visually only this shot action: {shot.text}",
+        f"Render visually only this shot action: {visual_action}",
         "The action/description text is silent directing metadata. It must NEVER be spoken, narrated, read aloud, lip-synced, or turned into dialogue by any character or off-screen voice.",
         "Do not add, translate, paraphrase or replace spoken dialogue.",
     ])
