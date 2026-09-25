@@ -9,6 +9,7 @@ from apps.projects.services import (
     create_project,
     lock_bible,
     lock_scene_plan,
+    normalize_active_beat_indexes,
     plan_scenes,
     persist_narrative_contract,
     review_beat,
@@ -294,6 +295,16 @@ class EpisodeViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         episode = self.get_queryset().get(pk=episode.pk)
         return Response(EpisodeSerializer(episode).data)
+
+    @action(detail=True, methods=["post"], url_path="normalize-beat-indexes")
+    def normalize_beat_indexes_action(self, request, pk=None):
+        episode = self.get_object()
+        try:
+            result = normalize_active_beat_indexes(episode)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        episode = self.get_queryset().get(pk=episode.pk)
+        return Response({"normalization": result, "episode": EpisodeSerializer(episode).data})
 
     @action(detail=True, methods=["post"])
     def assemble(self, request, pk=None):
