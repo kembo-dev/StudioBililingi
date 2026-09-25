@@ -546,8 +546,16 @@ export default function ProjectPage() {
                             <p className="mt-2 text-xs text-[#9aa3b2]">{shot.video_prompt || shot.text}</p>
                             {shot.reference_uids?.length ? (
                               <div className="mt-2 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
-                                <p className="text-[10px] uppercase tracking-[0.12em] text-[#e8c36a]">Références verrouillées pour ce shot · {shot.reference_uids.length}</p>
+                                <p className="text-[10px] uppercase tracking-[0.12em] text-[#e8c36a]">Références verrouillées pour ce shot · {shot.reference_uids.length + (beat.scene_frames?.find((frame) => frame.meta?.locked) ? 1 : 0)}</p>
                                 <div className="mt-1 flex flex-wrap gap-1">
+                                  {beat.scene_frames?.find((frame) => frame.meta?.locked) ? (() => {
+                                    const frame = beat.scene_frames?.find((candidate) => candidate.meta?.locked);
+                                    return frame ? <div key={`scene-frame-${frame.id}`} className="flex items-center gap-1 rounded border border-[#e8c36a]/50 bg-[#e8c36a]/5 px-1.5 py-1 text-[10px]">
+                                      <img src={mediaUrl(frame.uri)} alt="Image de scène verrouillée" className="h-8 w-8 rounded object-cover" />
+                                      <span>Image de scène</span>
+                                      <code className="text-[#6f7785]">scene:{frame.id}</code>
+                                    </div> : null;
+                                  })() : null}
                                   {shot.reference_uids.map((uid) => {
                                     const ref = project.refs?.find((candidate) => candidate.reference_uid === uid || candidate.meta?.reference_uid === uid);
                                     return <div key={uid} className="flex items-center gap-1 rounded border border-[#2a2e38] px-1.5 py-1 text-[10px]">
