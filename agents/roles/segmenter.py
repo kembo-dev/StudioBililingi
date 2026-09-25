@@ -25,7 +25,11 @@ class BeatSegmenter:
                 "Si une phrase dépasse la limite, réécris-la en plusieurs phrases naturelles avant de créer les beats. "
                 "Fusionne une micro-réplique avec l'action ou la réaction visuelle adjacente dans la même scène."
             ),
-            "voix_off": "VOIX OFF: conserve explicitement la voix off dans dialogue et décris séparément l'image.",
+            "voix_off": (
+                "VOIX OFF: sépare strictement narration et dialogue personnage. Mets la voix off externe dans narration. "
+                "Mets uniquement les paroles réellement prononcées par un personnage dans dialogue avec speaker_id canonique. "
+                "Un même beat peut contenir narration ET dialogue si les deux sont nécessaires à la même unité narrative."
+            ),
             "rencontre": "RENCONTRE: privilégie gestes, regards, silences et répliques courtes entre les deux présences.",
             "storytell": "STORYTELL: conserve la narration tout en créant une action visuelle précise par beat.",
         }
@@ -44,7 +48,7 @@ class BeatSegmenter:
                 "avec les event_ids autorisés pour CETTE scène; ne déplace jamais un EVxx vers une autre scène pendant une correction. "
                 "Retourne JSON {\"beats\": [...]} uniquement. Chaque beat doit fournir: "
                 "text, event_id, scene_index, scene_heading, scene_summary, location_id, time_of_day, lighting, "
-                "character_ids, speaker_id, prop_ids, camera {shot_size, angle, move, lens}, emotion, dialogue, "
+                "character_ids, speaker_id, prop_ids, camera {shot_size, angle, move, lens}, emotion, narration, dialogue, "
                 "continuity, duration_seconds, video_prompt, negative_prompt, backend. "
                 "Utilise uniquement les ids de personnages/lieux/objets présents dans la bible quand ils existent. "
                 "SCENE PLAN LOCK: le SCENE PLAN est déjà validé et canonique. Chaque beat doit reprendre exactement un scene_index existant, son location_id et son time_of_day. Ne crée, ne fusionne, ne déplace et ne renumérote aucune scène. "
