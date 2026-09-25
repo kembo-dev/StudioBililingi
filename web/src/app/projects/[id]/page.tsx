@@ -69,6 +69,7 @@ export default function ProjectPage() {
   const [reframe, setReframe] = useState<Record<number, string>>({});
   const [reframeOpen, setReframeOpen] = useState<Record<number, boolean>>({});
   const [sceneFramePrompts, setSceneFramePrompts] = useState<Record<number, string>>({});
+  const [sceneFrameRefs, setSceneFrameRefs] = useState<Record<number, { uri: string; name: string }>>({});
   const [previewRef, setPreviewRef] = useState<Ref | null>(null);
   const [showAddRef, setShowAddRef] = useState(false);
   const [newRef, setNewRef] = useState({ entity_type: "prop", name: "", look: "", role: "", time_of_day: "", story_function: "" });
@@ -120,6 +121,32 @@ export default function ProjectPage() {
     } finally {
       setBusy("");
     }
+  }
+
+  async function uploadSceneFrameRef(beatId: number, file: File) {
+    const key = `upload-scene-frame-ref-${beatId}`;
+    setBusy(key);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const uploaded = await api<{ uri: string; name: string }>(`/api/beats/${beatId}/upload-scene-frame-reference/`, {
+        method: "POST",
+        body: form,
+      });
+      setSceneFrameRefs((current) => ({ ...current, [beatId]: uploaded }));
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function regenerateSceneFrame(beatId: number) {
+    await run(`scene-frame-${beatId}`, `/api/beats/${beatId}/generate-scene-frame/`, {
+      prompt: sceneFramePrompts[beatId] ?? "",
+      reference_uri: sceneFrameRefs[beatId]?.uri ?? "",
+    });
   }
 
   async function uploadShotAdjustmentRef(shotId: number, file: File) {
@@ -585,12 +612,17 @@ export default function ProjectPage() {
                       <div className="rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div><p className="text-xs font-medium text-[#e8c36a]">🖼 Image de scène du beat</p><p className="text-[10px] text-[#6f7785]">Générée à partir des refs canoniques du beat. Une fois verrouillée, elle rejoint ces refs pour guider la vidéo.</p></div>
-                          <button type="button" onClick={() => run(`scene-frame-${beat.id}`, `/api/beats/${beat.id}/generate-scene-frame/`, { prompt: sceneFramePrompts[beat.id] ?? "" })} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a]">{busy === `scene-frame-${beat.id}` ? "Génération…" : beat.scene_frames?.length ? "Régénérer l’image" : "Générer l’image de scène"}</button>
+                          <button type="button" onClick={() => regenerateSceneFrame(beat.id)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a]">{busy === `scene-frame-${beat.id}` ? "Génération…" : beat.scene_frames?.length ? "Régénérer l’image" : "Générer l’image de scène"}</button>
                         </div>
                         {beat.scene_frames?.[0] ? <div className="mt-2 space-y-2">
                           <img src={mediaUrl(beat.scene_frames[0].uri)} alt={`Image de scène beat ${beat.index}`} className="max-h-80 w-full rounded border border-[#2a2e38] object-contain bg-black" />
                           <div className="flex flex-wrap gap-2">
-                            <input maxLength={4000} value={sceneFramePrompts[beat.id] ?? ""} onChange={(e) => setSceneFramePrompts((cur) => ({ ...cur, [beat.id]: e.target.value }))} placeholder="Reprompter l’image de scène…" className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]" />
+                            <input maxLength={4000} value={sceneFramePrompts[beat.id] ?? ""} onChange={(e) => setSceneFramePrompts((cur) => ({ ...cur, [beat.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); regenerateSceneFrame(beat.id); } }} placeholder="Reprompter l’image de scène…" className="min-w-56 flex-1 rounded border border-[#2a2e38] bg-[#14161c] px-2 py-1 text-xs outline-none focus:border-[#e8c36a]" />
+                            <label className="cursor-pointer rounded border border-[#2a2e38] px-2 py-1 text-xs text-[#c5cad3]">
+                              {busy === `upload-scene-frame-ref-${beat.id}` ? "Ajout…" : sceneFrameRefs[beat.id] ? "✓ Pièce jointe" : "＋ Pièce jointe"}
+                              <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadSceneFrameRef(beat.id, file); e.currentTarget.value = ""; }} />
+                            </label>
+                            <button type="button" disabled={busy === `scene-frame-${beat.id}` || busy === `upload-scene-frame-ref-${beat.id}`} onClick={() => regenerateSceneFrame(beat.id)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a] disabled:opacity-40">{busy === `scene-frame-${beat.id}` ? "Envoi…" : "Envoyer"}</button>
                             {!beat.scene_frames[0].meta?.locked ? <button type="button" onClick={() => run(`lock-frame-${beat.id}`, `/api/beats/${beat.id}/lock-scene-frame/`, { asset_id: beat.scene_frames?.[0]?.id })} className="rounded border border-green-500/60 px-2 py-1 text-xs text-green-400">{busy === `lock-frame-${beat.id}` ? "…" : "✓ Verrouiller l’image"}</button> : <span className="self-center text-xs text-green-400">✓ Image de scène verrouillée · prête comme ref vidéo</span>}
                           </div>
                         </div> : <p className="mt-2 text-[10px] text-amber-300">Étape suivante : génère l’image de scène depuis les références du beat.</p>}
