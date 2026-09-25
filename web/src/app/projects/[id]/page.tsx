@@ -55,6 +55,7 @@ type Project = {
   delivery: string;
   visual_style: string;
   refs?: Ref[];
+  usage?: { prompt_tokens_estimated: number; video_generations: number; video_regenerations: number; failed_video_generations: number; video_seconds_requested: number; video_seconds_successful: number; note?: string; episodes?: { episode_id: number; episode_number: number; title: string; prompt_tokens_estimated: number; video_generations: number; video_regenerations: number; failed_video_generations: number; video_seconds_requested: number; video_seconds_successful: number }[] };
   narrative_contract?: NarrativeContract | null;
   bibles: { id: number; version: number; locked: boolean; characters: Character[]; locations: Location[]; props: Prop[] }[];
   seasons: { id: number; episodes: Episode[] }[];
@@ -308,6 +309,30 @@ export default function ProjectPage() {
           ))}
         </div>
       </section>
+      {project.usage ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl">Consommation de production</h2>
+            <span className="text-xs text-[#9aa3b2]">Projet complet</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-3"><p className="text-[10px] uppercase text-[#9aa3b2]">Tokens prompt</p><p className="mt-1 text-lg font-medium">≈ {project.usage.prompt_tokens_estimated.toLocaleString()}</p></div>
+            <div className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-3"><p className="text-[10px] uppercase text-[#9aa3b2]">Générations vidéo</p><p className="mt-1 text-lg font-medium">{project.usage.video_generations}</p></div>
+            <div className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-3"><p className="text-[10px] uppercase text-[#9aa3b2]">Régénérations</p><p className="mt-1 text-lg font-medium">{project.usage.video_regenerations}</p></div>
+            <div className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-3"><p className="text-[10px] uppercase text-[#9aa3b2]">Vidéo demandée</p><p className="mt-1 text-lg font-medium">{project.usage.video_seconds_requested.toFixed(0)}s</p></div>
+            <div className="rounded-xl border border-[#2a2e38] bg-[#14161c] p-3"><p className="text-[10px] uppercase text-[#9aa3b2]">Échecs</p><p className="mt-1 text-lg font-medium">{project.usage.failed_video_generations}</p></div>
+          </div>
+          {project.usage.episodes?.length ? (
+            <div className="overflow-x-auto rounded-xl border border-[#2a2e38] bg-[#14161c]">
+              <table className="w-full text-left text-xs">
+                <thead className="text-[#9aa3b2]"><tr><th className="p-3">Épisode</th><th className="p-3">Tokens</th><th className="p-3">Générations</th><th className="p-3">Régénérations</th><th className="p-3">Secondes</th><th className="p-3">Échecs</th></tr></thead>
+                <tbody>{project.usage.episodes.map((row) => <tr key={row.episode_id} className="border-t border-[#2a2e38]"><td className="p-3">E{row.episode_number} · {row.title}</td><td className="p-3">≈ {row.prompt_tokens_estimated.toLocaleString()}</td><td className="p-3">{row.video_generations}</td><td className="p-3">{row.video_regenerations}</td><td className="p-3">{row.video_seconds_requested.toFixed(0)}s</td><td className="p-3">{row.failed_video_generations}</td></tr>)}</tbody>
+              </table>
+            </div>
+          ) : null}
+          <p className="text-[10px] text-[#6f7785]">{project.usage.note}</p>
+        </section>
+      ) : null}
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl">Assets visuels</h2>
