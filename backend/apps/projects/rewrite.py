@@ -1,5 +1,5 @@
 from apps.production.models import Review
-from apps.story.models import Beat, BeatTake
+from apps.story.models import Beat, BeatTake, Shot, ShotTake
 
 FORMS = ("storytell", "voix_off", "conversation", "rencontre")
 
@@ -50,7 +50,39 @@ def recontextualize_beat(beat: Beat, instruction: str, form: str = "storytell") 
         text = ""
     if not text:
         text = _fallback_text(beat, prompt, form)
-    # Recontextualization creates a draft take instead of mutating the canonical beat.
+    # Apply the staging instruction to the actual production shots. The canonical
+    # story text stays immutable, while every existing shot receives the new
+    # directing layer and becomes eligible for a fresh generated take.
+    shots = list(beat.shots.order_by("index"))
+    for shot in shots:
+        continuity = dict(shot.continuity or {})
+        history = list(continuity.get("staging_revisions") or [])
+        history.append({
+            "instruction": prompt,
+            "intent": rewrite_meta.get("intent", ""),
+            "continuity": rewrite_meta.get("continuity", ""),
+            "performance": rewrite_meta.get("performance", ""),
+            "camera": rewrite_meta.get("camera", ""),
+            "sound": rewrite_meta.get("sound", ""),
+        })
+        continuity["staging_revisions"] = history[-10:]
+        continuity["active_staging_instruction"] = prompt
+        shot.continuity = continuity
+        if rewrite_meta.get("video_prompt"):
+            shot.video_prompt = (
+                f"{shot.video_prompt.strip()}\n\n"
+                f"MISE EN SCÈNE DEMANDÉE: {rewrite_meta['video_prompt']}"
+            ).strip()
+        else:
+            shot.video_prompt = (
+                f"{shot.video_prompt.strip()}\n\n"
+                f"MISE EN SCÈNE DEMANDÉE: {prompt}"
+            ).strip()
+        shot.status = Shot.Status.DRAFT
+        shot.save(update_fields=["continuity", "video_prompt", "status"])
+        shot.takes.filter(status=ShotTake.Status.LOCKED).update(status=ShotTake.Status.REVIEW)
+
+    # Keep an auditable beat-level proposal as well.
     next_number = (beat.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
     BeatTake.objects.create(
         beat=beat,
@@ -58,13 +90,14 @@ def recontextualize_beat(beat: Beat, instruction: str, form: str = "storytell") 
         prompt=text[:400],
         negative_prompt=beat.negative_prompt,
         backend=beat.backend,
-        status=BeatTake.Status.QUEUED,
+        status=BeatTake.Status.REVIEW,
         generation_meta={
             "form": form,
             "rewrite_instruction": prompt,
             "source_text": beat.text,
             "script_doctor": rewrite_meta,
+            "applied_to_shot_ids": [shot.id for shot in shots],
         },
     )
-    Review.objects.create(beat=beat, episode=beat.episode, decision=Review.Decision.REVISE, comment=f"[{form}] {prompt}")
+    Review.objects.create(beat=beat, episode=beat.episode, decision=Review.Decision.REVISE, comment=f"[mise_en_scene:{form}] {prompt}")
     return beat
