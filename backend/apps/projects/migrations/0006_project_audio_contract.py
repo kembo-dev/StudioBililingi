@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("projects", "0005_project_visual_style"),
+        ("projects", "0004_project_visual_style"),
     ]
 
     operations = [
