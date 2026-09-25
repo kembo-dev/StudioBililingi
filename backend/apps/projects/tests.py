@@ -1059,3 +1059,29 @@ class ProductionRevisionGateTests(TestCase):
         self.assertFalse(frame.meta["locked"])
         self.assertTrue(frame.meta["invalidated_by_revision"])
         self.assertEqual(self.shot.continuity["revision_constraints"][-1]["type"], "remove_reference")
+
+
+    def test_identity_revision_prioritizes_character_ref_and_invalidates_scene_frame(self):
+        from apps.production.models import Asset
+        from apps.projects.services import review_shot
+
+        character = self.project.characters.create(key="eleve", name="L'Élève", look="élève canonique")
+        character_uid = character.reference_uid
+        self.beat.characters.add(character)
+        self.shot.reference_uids = [character_uid]
+        self.shot.save(update_fields=["reference_uids"])
+        frame = Asset.objects.create(
+            project=self.project, beat=self.beat, kind=Asset.Kind.IMAGE,
+            role=Asset.Role.START_FRAME, uri="/media/frame-eleve.jpg",
+            meta={"scene_frame": True, "locked": True, "source_reference_uids": [character_uid]},
+        )
+
+        review_shot(self.shot, "revise", "L'image ne reflète pas L'Élève, garder exactement le même visage", take_id=self.take.id)
+
+        self.shot.refresh_from_db()
+        frame.refresh_from_db()
+        self.assertEqual(self.shot.continuity["priority_reference_uids"], [character_uid])
+        self.assertEqual(self.shot.reference_uids[0], character_uid)
+        self.assertEqual(self.shot.continuity["revision_constraints"][-1]["type"], "identity_lock")
+        self.assertFalse(frame.meta["locked"])
+        self.assertEqual(frame.meta["invalidated_identity_reference_uids"], [character_uid])
