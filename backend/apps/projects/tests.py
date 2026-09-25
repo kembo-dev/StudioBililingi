@@ -323,7 +323,10 @@ class ProductionPipelineTests(TestCase):
 
     def test_shot_review_locks_exact_take(self):
         beat = persist_beats(self.episode, [{"text": "Beat narratif", "duration_seconds": 12}])[0]
-        payload = {"shots": [{"text": "Beat narratif", "video_prompt": "Beat narratif"}]}
+        payload = {"shots": [
+            {"text": "Beat narratif - plan 1", "video_prompt": "Beat narratif - plan 1"},
+            {"text": "Beat narratif - plan 2", "video_prompt": "Beat narratif - plan 2"},
+        ]}
         with patch("agents.roles.shot_planner.ShotPlanner.plan", return_value=payload):
             shot = plan_beat_shots(beat)[0]
         first = ShotTake.objects.create(shot=shot, number=1, uri="file:///tmp/shot-one.mp4", status=ShotTake.Status.REVIEW)
