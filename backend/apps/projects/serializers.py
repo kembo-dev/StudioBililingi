@@ -68,6 +68,7 @@ class ShotSerializer(serializers.ModelSerializer):
 
 class BeatSerializer(serializers.ModelSerializer):
     clip_uri = serializers.SerializerMethodField()
+    usage = serializers.SerializerMethodField()
     takes = BeatTakeSerializer(many=True, read_only=True)
     shots = ShotSerializer(many=True, read_only=True)
     character_ids = serializers.PrimaryKeyRelatedField(source="characters", many=True, read_only=True)
@@ -76,7 +77,22 @@ class BeatSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Beat
-        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes", "shots", "scene_frames")
+        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes", "shots", "scene_frames", "usage")
+
+    def get_usage(self, obj):
+        takes = [take for shot in obj.shots.all() for take in shot.takes.all()]
+        prompt_tokens = sum(int((take.generation_meta or {}).get("usage", {}).get("prompt_tokens_estimated") or 0) for take in takes)
+        video_seconds = sum(float((take.generation_meta or {}).get("usage", {}).get("video_seconds_requested") or 0) for take in takes)
+        successful_seconds = sum(
+            float((take.generation_meta or {}).get("usage", {}).get("video_seconds_requested") or 0)
+            for take in takes if take.uri and take.status != ShotTake.Status.FAILED
+        )
+        return {
+            "prompt_tokens_estimated": prompt_tokens,
+            "video_generations": len(takes),
+            "video_seconds_requested": video_seconds,
+            "video_seconds_successful": successful_seconds,
+        }
 
     def get_scene_frames(self, obj):
         return [
