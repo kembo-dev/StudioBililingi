@@ -280,7 +280,18 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
     ingredient_pack = resolve_ingredients(beat)
     canonical_ref_uris = [row.get("uri") for row in ingredient_pack.get("items", []) if row.get("uri")]
     if not canonical_ref_uris:
-        raise ValueError("Génère d'abord les références canoniques du beat avant son image de scène")
+        # Narrative/voice-over beats can legitimately have no entity explicitly
+        # attached to the beat. Use the project's canonical visual library as
+        # fallback so the scene frame still inherits the production identity.
+        canonical_ref_uris = list(
+            Asset.objects.filter(
+                project=project,
+                kind=Asset.Kind.IMAGE,
+                role__in=[Asset.Role.CHARACTER_REF, Asset.Role.LOCATION_REF, Asset.Role.PROP_REF],
+            ).exclude(uri="").order_by("id").values_list("uri", flat=True)[:3]
+        )
+    if not canonical_ref_uris:
+        raise ValueError("Génère d'abord les références canoniques du projet avant l'image de scène")
     uri = artist.scene_frame(
         beat_text=beat.text,
         characters=characters,
