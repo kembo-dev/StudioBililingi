@@ -998,3 +998,36 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(Beat.objects.filter(episode=self.episode).count(), before_beats)
         self.assertEqual(self.episode.scenes.count(), before_scenes)
 
+
+
+class ProductionRevisionGateTests(TestCase):
+    def setUp(self):
+        from apps.projects.models import Organization, Project, Season
+        from apps.story.models import Episode, Script, Segmentation, Beat, Shot, ShotTake, ScenePlan
+        org = Organization.objects.create(name="Revision Studio", slug="revision-studio")
+        self.project = Project.objects.create(organization=org, title="Revision Gate", slug="revision-gate", concept="test")
+        season = Season.objects.create(project=self.project, number=1, title="S1")
+        self.episode = Episode.objects.create(season=season, number=1, title="E1", logline="test")
+        script = Script.objects.create(episode=self.episode, version=1, fountain="test")
+        plan = ScenePlan.objects.create(episode=self.episode, script=script, version=1, payload=[], locked=True)
+        segmentation = Segmentation.objects.create(episode=self.episode, script=script, scene_plan=plan, version=1, payload=[])
+        self.beat = Beat.objects.create(episode=self.episode, script=script, segmentation=segmentation, index=1, text="Action", word_count=1)
+        self.shot = Shot.objects.create(beat=self.beat, index=1, text="Action", duration_seconds=8, status=Beat.Status.LOCKED)
+        self.take = ShotTake.objects.create(shot=self.shot, number=1, uri="/media/test.mp4", status=ShotTake.Status.LOCKED)
+
+    def test_revision_invalidates_locked_take_and_blocks_assembly(self):
+        from apps.projects.services import review_shot
+        from apps.projects.serializers import EpisodeSerializer
+        from apps.story.models import Beat, ShotTake
+
+        review_shot(self.shot, "revise", "Retirer le cartable", take_id=self.take.id)
+        self.shot.refresh_from_db()
+        self.take.refresh_from_db()
+        self.assertEqual(self.shot.status, Beat.Status.DRAFT)
+        self.assertEqual(self.take.status, ShotTake.Status.REVIEW)
+
+        readiness = EpisodeSerializer(self.episode).data["assembly_readiness"]
+        self.assertFalse(readiness["ready"])
+        self.assertEqual(readiness["beat_progress"][0]["status"], "needs_revision")
+        self.assertEqual(readiness["blockers"][0]["reason"], "revision_required")
+        self.assertEqual(readiness["blockers"][0]["feedback"], "Retirer le cartable")
