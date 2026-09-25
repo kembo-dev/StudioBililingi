@@ -221,7 +221,15 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         "The action/description text is silent directing metadata. It must NEVER be spoken, narrated, read aloud, lip-synced, or turned into dialogue by any character or off-screen voice.",
         "Do not add, translate, paraphrase or replace spoken dialogue.",
     ])
-    if beat.dialogue:
+    if beat.dialogue and _is_voice_over(beat):
+        lines.extend([
+            "SPEECH MODE: EXTERNAL VOICE-OVER NARRATION.",
+            f'ONLY ALLOWED NARRATION (verbatim): "{beat.dialogue}"',
+            "The narrator is external and off-screen. No visible character lip-syncs or speaks these words.",
+            "Pronounce the canonical narration in its original language; when it is French, speak French naturally.",
+            "Do not translate, paraphrase, summarize, improvise or add words before or after the canonical narration.",
+        ])
+    elif beat.dialogue:
         lines.extend([
             "SPEECH MODE: DIALOGUE ONLY.",
             f'ONLY ALLOWED SPOKEN WORDS (verbatim): "{beat.dialogue}"',
@@ -286,6 +294,18 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     }
 
 
+def _is_voice_over(beat: Beat) -> bool:
+    """True when spoken beat text belongs to the external narrator, not an on-screen character."""
+    project = beat.episode.season.project
+    if project.delivery == "voix_off":
+        return True
+    try:
+        contract = project.narrative_contract
+    except Exception:
+        return False
+    return contract.narrator == "external" and contract.point_of_view == "third_person"
+
+
 def validate_render_readiness(beat: Beat) -> dict:
     """Fail before spending Veo quota when canonical continuity is incomplete."""
     context = build_continuity_context(beat)
@@ -297,7 +317,7 @@ def validate_render_readiness(beat: Beat) -> dict:
     scene_frame = beat.assets.filter(role=Asset.Role.START_FRAME, meta__locked=True).order_by("-id").first()
     if scene_frame is None:
         errors.append("image de scène du beat absente ou non verrouillée")
-    if beat.dialogue and not beat.speaker_id:
+    if beat.dialogue and not beat.speaker_id and not _is_voice_over(beat):
         errors.append("dialogue sans speaker canonique")
     if beat.location_id and not any(
         item["role"] == Asset.Role.LOCATION_REF for item in pack["items"]
