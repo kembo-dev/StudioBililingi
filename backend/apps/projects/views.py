@@ -483,6 +483,31 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            message = str(exc)
+            if "BILLING_DISABLED" in message or ("billing" in message.lower() and "enable" in message.lower()):
+                return Response(
+                    {
+                        "detail": "Génération d’image indisponible : la facturation Google Cloud/Vertex AI du projet configuré est désactivée. Active la facturation puis réessaie.",
+                        "code": "provider_billing_disabled",
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            if "PERMISSION_DENIED" in message or "403" in message:
+                return Response(
+                    {
+                        "detail": "Google a refusé la génération d’image. Vérifie les autorisations et la configuration du provider.",
+                        "code": "provider_permission_denied",
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            return Response(
+                {
+                    "detail": "La génération de l’image de scène a échoué chez le provider. Réessaie ou vérifie sa configuration.",
+                    "code": "scene_frame_provider_error",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         beat = self.get_queryset().get(pk=beat.pk)
         return Response(BeatSerializer(beat).data)
 
