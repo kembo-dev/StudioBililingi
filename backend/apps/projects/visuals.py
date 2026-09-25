@@ -76,6 +76,7 @@ def regenerate_visual_ref(project: Project, entity_type: str, entity_key: str, c
     entity_type = str(entity_type or "").strip().lower()
     entity_key = str(entity_key or "").strip()
     custom_prompt = str(custom_prompt or "").strip()
+    extra_reference_uri = str(extra_reference_uri or "").strip()
     if len(custom_prompt) > 4000:
         raise ValueError("Le prompt complémentaire est limité à 4000 caractères")
     models = {"character": Character, "location": Location, "prop": Prop}
@@ -260,7 +261,7 @@ def delete_visual_ref(project: Project, asset_id: int) -> None:
             pass
 
 
-def generate_beat_scene_frame(beat, custom_prompt: str = ""):
+def generate_beat_scene_frame(beat, custom_prompt: str = "", extra_reference_uri: str = ""):
     """Generate a new master scene frame for one beat from canonical story entities."""
     custom_prompt = str(custom_prompt or "").strip()
     if len(custom_prompt) > 4000:
@@ -292,6 +293,10 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
     ordered_items = [by_uid[uid] for uid in priority_uids if uid in by_uid]
     ordered_items.extend(row for row in ingredient_pack.get("items", []) if row not in ordered_items)
     canonical_ref_uris = [row.get("uri") for row in ordered_items if row.get("uri")]
+    # A user attachment is an additional directing reference, not a replacement
+    # for the canonical character/location/prop identity refs.
+    if extra_reference_uri:
+        canonical_ref_uris = [extra_reference_uri, *[uri for uri in canonical_ref_uris if uri != extra_reference_uri]]
     if not canonical_ref_uris:
         # Narrative/voice-over beats can legitimately have no entity explicitly
         # attached to the beat. Use the project's canonical visual library as
@@ -338,6 +343,7 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
             "scene_frame": True,
             "locked": False,
             "custom_prompt": custom_prompt,
+            "extra_reference_uri": extra_reference_uri or None,
             "beat_index": beat.index,
             "character_keys": [row["key"] for row in characters],
             "location_key": location["key"] if location else None,
