@@ -1,0 +1,21 @@
+{
+  "defaults": {
+    "text": {"provider": "google", "model": "gemini-2.5-flash"},
+    "image": {"provider": "google", "model": "gemini-2.5-flash-image"},
+    "video": {"provider": "google", "model": "veo-3.1-generate-001"},
+    "audio": {"provider": "google"}
+  },
+  "providers": {
+    "google": {},
+    "ollama": {
+      "base_url": "http://localhost:11434",
+      "text": {"model": "qwen3:14b", "timeout_seconds": 180}
+    },
+    "stub": {}
+  },
+  "roles": {
+    "beat_segmenter": {},
+    "shot_planner": {},
+    "beat_rewriter": {}
+  }
+}
