@@ -1156,3 +1156,31 @@ class LegacyBeatIndexRepairTests(TestCase):
         self.assertEqual(take.shot_id, shot.id)
         self.assertEqual(asset.beat_id, second.id)
         self.assertEqual(take.status, ShotTake.Status.LOCKED)
+
+
+class ProjectUsageDashboardTests(TestCase):
+    def test_project_usage_aggregates_video_takes_by_episode(self):
+        from apps.projects.models import Organization, Project, Season
+        from apps.projects.serializers import ProjectSerializer
+        from apps.story.models import Beat, Episode, ScenePlan, Script, Segmentation, Shot, ShotTake
+
+        org = Organization.objects.create(name="Usage Studio", slug="usage-studio")
+        project = Project.objects.create(organization=org, title="Usage", slug="usage", concept="test")
+        season = Season.objects.create(project=project, number=1, title="S1")
+        episode = Episode.objects.create(season=season, number=1, title="E1", logline="test")
+        script = Script.objects.create(episode=episode, version=1, fountain="test")
+        plan = ScenePlan.objects.create(episode=episode, script=script, version=1, payload=[], locked=True)
+        segmentation = Segmentation.objects.create(episode=episode, script=script, scene_plan=plan, version=1, payload=[])
+        beat = Beat.objects.create(episode=episode, script=script, segmentation=segmentation, index=0, text="Action", word_count=1)
+        shot = Shot.objects.create(beat=beat, index=1, text="Action", duration_seconds=8)
+        ShotTake.objects.create(shot=shot, number=1, uri="/media/a.mp4", status=ShotTake.Status.REVIEW, generation_meta={"usage": {"prompt_tokens_estimated": 100, "video_seconds_requested": 8}})
+        ShotTake.objects.create(shot=shot, number=2, uri="/media/b.mp4", status=ShotTake.Status.LOCKED, generation_meta={"usage": {"prompt_tokens_estimated": 120, "video_seconds_requested": 8}})
+
+        usage = ProjectSerializer(project).data["usage"]
+        self.assertEqual(usage["prompt_tokens_estimated"], 220)
+        self.assertEqual(usage["video_generations"], 2)
+        self.assertEqual(usage["video_regenerations"], 1)
+        self.assertEqual(usage["video_seconds_requested"], 16.0)
+        self.assertEqual(usage["video_seconds_successful"], 16.0)
+        self.assertEqual(usage["failed_video_generations"], 0)
+        self.assertEqual(usage["episodes"][0]["video_generations"], 2)
