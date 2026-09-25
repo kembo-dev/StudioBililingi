@@ -1538,6 +1538,67 @@ def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
         ))
     return shots
 
+def _apply_structured_shot_revision(shot: Shot, comment: str) -> dict:
+    """Apply deterministic reference removals requested by a human review."""
+    import re
+    from apps.production.models import Asset
+
+    text = str(comment or "").strip()
+    lowered = text.casefold()
+    removal_cues = (
+        "ne doit pas", "sans ", "retir", "enlever", "supprim", "pas de ",
+        "ne porte pas", "ne pas porter", "ne devrait pas",
+    )
+    result = {"removed_reference_uids": [], "removed_entities": [], "scene_frame_invalidated": False}
+    if not text or not any(cue in lowered for cue in removal_cues):
+        return result
+
+    project = shot.beat.episode.season.project
+    candidates = []
+    for entity in list(project.characters.all()) + list(project.locations.all()) + list(project.props.all()):
+        names = [str(getattr(entity, "name", "") or ""), str(getattr(entity, "key", "") or "")]
+        aliases = getattr(entity, "aliases", None)
+        if isinstance(aliases, list):
+            names.extend(str(x) for x in aliases)
+        tokens = [n.casefold().strip() for n in names if n and len(n.strip()) >= 3]
+        if any(token in lowered for token in tokens):
+            candidates.append(entity)
+
+    current = list(shot.reference_uids or [])
+    for entity in candidates:
+        uid = str(getattr(entity, "reference_uid", "") or "")
+        if uid and uid in current:
+            current.remove(uid)
+            result["removed_reference_uids"].append(uid)
+            result["removed_entities"].append({"key": entity.key, "name": entity.name, "reference_uid": uid})
+    if result["removed_reference_uids"]:
+        shot.reference_uids = current
+        continuity = dict(shot.continuity or {})
+        history = list(continuity.get("revision_constraints") or [])
+        history.append({
+            "type": "remove_reference",
+            "instruction": text,
+            "removed_reference_uids": result["removed_reference_uids"],
+            "removed_entities": result["removed_entities"],
+        })
+        continuity["revision_constraints"] = history
+        shot.continuity = continuity
+        shot.save(update_fields=["reference_uids", "continuity"])
+
+        # The beat scene frame was generated from the old reference set. It is
+        # no longer a trustworthy visual anchor, so unlock it for regeneration.
+        for frame in Asset.objects.filter(project=project, beat=shot.beat, role=Asset.Role.START_FRAME):
+            meta = dict(frame.meta or {})
+            if meta.get("locked"):
+                meta["locked"] = False
+                meta["invalidated_by_revision"] = text
+                meta["invalidated_removed_reference_uids"] = result["removed_reference_uids"]
+                frame.meta = meta
+                frame.save(update_fields=["meta"])
+                result["scene_frame_invalidated"] = True
+    return result
+
+
 def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | None = None) -> Shot:
     from apps.production.models import Review
     if decision not in {"approve", "reject", "revise"}:
@@ -1563,6 +1624,7 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
         # locked take must never remain eligible for final assembly.
         shot.takes.filter(status=ShotTake.Status.LOCKED).update(status=ShotTake.Status.REVIEW)
         shot.status = Beat.Status.DRAFT
+        _apply_structured_shot_revision(shot, comment)
     shot.save(update_fields=["status"])
     Review.objects.create(episode=shot.beat.episode, beat=shot.beat, shot=shot, shot_take=take, decision=decision, comment=comment)
     return shot
