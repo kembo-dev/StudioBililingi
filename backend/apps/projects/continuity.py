@@ -166,9 +166,15 @@ def resolve_ingredients(beat: Beat, *, reference_uids: list[str] | None = None) 
         Asset.Role.LOCATION_REF: 2,
         Asset.Role.PROP_REF: 3,
     }
+    priority_uids = []
+    if hasattr(beat, "_shot_priority_reference_uids"):
+        priority_uids = [str(uid) for uid in beat._shot_priority_reference_uids if str(uid).strip()]
+    priority_rank = {uid: index for index, uid in enumerate(priority_uids)}
     media_items = sorted(
         [item for item in picked if item.get("uri")],
         key=lambda item: (
+            0 if str(item.get("reference_uid") or "") in priority_rank else 1,
+            priority_rank.get(str(item.get("reference_uid") or ""), 999),
             0 if speaker_key and item.get("key") == speaker_key else role_priority.get(item.get("role"), 9),
             str(item.get("reference_uid") or ""),
         ),
@@ -219,6 +225,8 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
             item["reference_uid"] for item in canonical_pack["items"] if item.get("reference_uid")
         ]
         shot.save(update_fields=["reference_uids"])
+    priority_uids = list((shot.continuity or {}).get("priority_reference_uids") or [])
+    beat._shot_priority_reference_uids = priority_uids
     pack = resolve_ingredients(beat, reference_uids=shot.reference_uids)
     scene_frame = beat.assets.filter(role=Asset.Role.START_FRAME, meta__locked=True).order_by("-id").first()
     project = beat.episode.season.project
