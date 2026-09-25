@@ -260,7 +260,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ("id", "title", "slug", "concept", "genre", "subgenre", "setting", "tone", "ending_intent", "episode_count_target", "episode_duration_seconds", "aspect_ratio", "delivery", "visual_style", "status", "created_at", "narrative_contract", "seasons", "bibles", "refs")
+        fields = ("id", "title", "slug", "concept", "genre", "subgenre", "setting", "tone", "ending_intent", "episode_count_target", "episode_duration_seconds", "aspect_ratio", "audio_contract", "delivery", "visual_style", "status", "created_at", "narrative_contract", "seasons", "bibles", "refs")
         read_only_fields = ("slug", "status", "created_at")
 
     def get_refs(self, obj):
@@ -282,6 +282,12 @@ class ProjectCreateSerializer(serializers.Serializer):
     episode_duration_seconds = serializers.IntegerField(required=False, allow_null=True, min_value=15, max_value=1800, default=None)
     tone = serializers.CharField(required=False, allow_blank=True, default="")
     ending_intent = serializers.CharField(required=False, allow_blank=True, default="")
+    aspect_ratio = serializers.ChoiceField(choices=("16:9", "9:16", "1:1", "4:5"), required=False, default="16:9")
+    audio_language = serializers.CharField(required=False, allow_blank=True, default="français")
+    narrator_voice = serializers.CharField(required=False, allow_blank=True, default="")
+    narrator_accent = serializers.CharField(required=False, allow_blank=True, default="")
+    narrator_tone = serializers.CharField(required=False, allow_blank=True, default="")
+    narrator_pace = serializers.ChoiceField(choices=("lent", "modéré", "rapide"), required=False, default="modéré")
     delivery = serializers.ChoiceField(choices=("storytell", "voix_off", "conversation", "rencontre"), required=False, default="storytell")
     visual_style = serializers.ChoiceField(choices=Project.VisualStyle.choices, required=False, default=Project.VisualStyle.REALISTIC)
     organization_name = serializers.CharField(required=False, default="Studio")
