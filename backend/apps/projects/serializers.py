@@ -69,6 +69,8 @@ class ShotSerializer(serializers.ModelSerializer):
 class BeatSerializer(serializers.ModelSerializer):
     clip_uri = serializers.SerializerMethodField()
     usage = serializers.SerializerMethodField()
+    speech_mode = serializers.SerializerMethodField()
+    narration = serializers.SerializerMethodField()
     takes = BeatTakeSerializer(many=True, read_only=True)
     shots = ShotSerializer(many=True, read_only=True)
     character_ids = serializers.PrimaryKeyRelatedField(source="characters", many=True, read_only=True)
@@ -77,7 +79,29 @@ class BeatSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Beat
-        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes", "shots", "scene_frames", "usage")
+        fields = ("id", "scene_id", "script_id", "narrative_event_id", "index", "take", "text", "word_count", "duration_seconds", "location_id", "character_ids", "speaker_id", "prop_ids", "emotion", "dialogue", "video_prompt", "negative_prompt", "backend", "status", "camera", "continuity", "clip_uri", "takes", "shots", "scene_frames", "usage", "speech_mode", "narration")
+
+    def get_narration(self, obj):
+        return str(((obj.continuity or {}).get("audio") or {}).get("narration") or "")
+
+    def get_speech_mode(self, obj):
+        audio = (obj.continuity or {}).get("audio") or {}
+        narration = str(audio.get("narration") or "").strip()
+        dialogue = str(audio.get("dialogue") or "").strip()
+        if not narration and not dialogue and obj.dialogue:
+            if obj.speaker_id:
+                dialogue = str(obj.dialogue).strip()
+            elif obj.episode.season.project.delivery == "voix_off":
+                narration = str(obj.dialogue).strip()
+            else:
+                dialogue = str(obj.dialogue).strip()
+        if narration and dialogue:
+            return "mixed"
+        if narration:
+            return "narration"
+        if dialogue:
+            return "dialogue"
+        return "silent"
 
     def get_usage(self, obj):
         takes = [take for shot in obj.shots.all() for take in shot.takes.all()]
