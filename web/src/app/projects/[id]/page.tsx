@@ -15,6 +15,7 @@ type Beat = {
   id: number;
   scene_id?: number | null;
   narrative_event_id?: number | null;
+  speaker_id?: number | null;
   index: number;
   text: string;
   word_count: number;
@@ -647,6 +648,29 @@ export default function ProjectPage() {
                         {!beat.scene_frames?.[0]?.meta?.locked ? <span className="text-[10px] text-[#6f7785]">Verrouille d’abord l’image de scène.</span> : null}
                       </div>
                     </div>
+                      {(beat.narration || beat.dialogue) ? (
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          {beat.narration ? (
+                            <div className="rounded-lg border border-[#2a2e38] bg-[#101218] p-3">
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#e8c36a]">🎙 Narration</p>
+                                <span className="text-[10px] text-[#6f7785]">Narrateur externe · hors champ</span>
+                              </div>
+                              <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#c5cad3]">{beat.narration}</p>
+                            </div>
+                          ) : null}
+                          {beat.dialogue ? (
+                            <div className="rounded-lg border border-[#2a2e38] bg-[#101218] p-3">
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#e8c36a]">💬 Dialogue</p>
+                                <span className="text-[10px] text-[#6f7785]">{project.bibles?.[0]?.characters?.find((character) => character.id === beat.speaker_id)?.name || (beat.speaker_id ? `Speaker #${beat.speaker_id}` : "Speaker non défini")}</span>
+                              </div>
+                              <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#c5cad3]">{beat.dialogue}</p>
+                              {!beat.speaker_id ? <p className="mt-2 text-[10px] text-red-300">⚠ Dialogue personnage sans speaker canonique : la génération vidéo sera bloquée.</p> : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     {beat.shots?.length ? (
                       <div className="space-y-2 border-l border-[#2a2e38] pl-3">
                         {beat.shots.map((shot) => (
