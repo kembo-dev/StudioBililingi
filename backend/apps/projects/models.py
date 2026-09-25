@@ -36,6 +36,11 @@ class Project(models.Model):
     tone = models.CharField(max_length=80, blank=True)
     ending_intent = models.TextField(blank=True)
     aspect_ratio = models.CharField(max_length=16, default="16:9")
+    audio_contract = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Contrat canonique de langue, narration et identité vocale du projet.",
+    )
     visual_style = models.CharField(
         max_length=32,
         choices=VisualStyle.choices,
