@@ -169,6 +169,8 @@ class EpisodeSerializer(serializers.ModelSerializer):
         beats_qs = segmentation.beats if segmentation else script.beats
         beats = list(beats_qs.order_by("index").prefetch_related("shots__takes"))
         missing, blockers, beat_progress = [], [], []
+        index_sequence = [beat.index for beat in beats]
+        beat_indexes_need_normalization = index_sequence != list(range(len(beats)))
         total = locked = 0
         for beat in beats:
             shots = list(beat.shots.order_by("index"))
@@ -222,6 +224,8 @@ class EpisodeSerializer(serializers.ModelSerializer):
             "total_shots": total, "locked_shots": locked, "missing": missing, "blockers": blockers,
             "beat_progress": beat_progress, "total_beats": len(beats),
             "locked_beats": sum(1 for row in beat_progress if row["status"] == "locked"),
+            "beat_indexes_need_normalization": beat_indexes_need_normalization,
+            "beat_index_sequence": index_sequence,
         }
 
 
