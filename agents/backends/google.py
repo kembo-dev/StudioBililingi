@@ -119,7 +119,7 @@ class GoogleTextBackend:
     def generate_json(self, system: str, user: str) -> dict:
         from google.genai import types
 
-        model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        model = getattr(self, "model_override", None) or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         client = _client()
         try:
             response = _with_quota_retry(lambda: client.models.generate_content(
@@ -145,7 +145,7 @@ class GoogleImageBackend:
     def generate(self, prompt: str, refs: list[str] | None = None, *, project_key: str | None = None) -> str:
         from google.genai import types
 
-        model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+        model = getattr(self, "model_override", None) or os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
         client = _client()
         try:
             contents = [types.Part.from_text(text=prompt)]
@@ -232,7 +232,7 @@ class GoogleVideoBackend:
     ) -> str:
         from google.genai import types
 
-        model = os.getenv("VEO_MODEL", "veo-3.1-generate-001")
+        model = getattr(self, "model_override", None) or os.getenv("VEO_MODEL", "veo-3.1-generate-001")
         usable = [uri for uri in (ingredients or []) if _usable(uri)]
         text = prompt
 
