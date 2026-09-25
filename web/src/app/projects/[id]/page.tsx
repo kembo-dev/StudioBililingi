@@ -446,7 +446,7 @@ export default function ProjectPage() {
                       {ep.assembly_readiness.beat_progress.map((item) => (
                         <button key={item.beat_id} type="button" onClick={() => document.getElementById(`beat-${item.beat_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} className={`flex items-center justify-between rounded border px-3 py-2 text-left transition hover:bg-white/5 ${item.status === "locked" ? "border-green-500/40 bg-green-500/5" : item.status === "needs_revision" ? "border-red-400/40 bg-red-400/5" : item.status === "in_progress" ? "border-amber-400/40 bg-amber-400/5" : "border-[#2a2e38] bg-[#14161c]"}`}>
                           <span>
-                            <span className="block text-xs text-white">Beat {item.beat_index}</span>
+                            <span className="block text-xs text-white">Beat {String(item.beat_index + 1).padStart(2, "0")}</span>
                             <span className="block text-[10px] text-[#9aa3b2]">{item.total_shots ? `${item.locked_shots}/${item.total_shots} shots verrouillés` : "Shots non préparés"}</span>
                           </span>
                           <span className={`text-[10px] font-medium ${item.status === "locked" ? "text-green-400" : item.status === "in_progress" ? "text-amber-300" : "text-[#6f7785]"}`}>{item.status === "locked" ? "✓ PRÊT" : item.status === "in_progress" ? "EN COURS" : "À FAIRE"}</span>
@@ -525,7 +525,7 @@ export default function ProjectPage() {
             {ep.beats.length ? (
               <ol className="mt-3 space-y-2">
                 {ep.beats.map((beat) => (
-                  <li key={beat.id} className="space-y-2 rounded-lg bg-[#0b0c10] px-3 py-2 text-sm">
+                  <li id={`beat-${beat.id}`} key={beat.id} className="scroll-mt-6 space-y-2 rounded-lg bg-[#0b0c10] px-3 py-2 text-sm">
                     <p>
                       <span className="mr-2 text-[#e8c36a]">{String(beat.index + 1).padStart(2, "0")} \u00b7 {beat.word_count} mots \u00b7 {beat.status}</span>
                       {beat.text}
