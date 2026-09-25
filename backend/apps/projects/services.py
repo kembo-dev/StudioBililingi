@@ -1545,6 +1545,7 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
     take = shot.takes.filter(pk=take_id).first() if take_id is not None else shot.takes.order_by("-number").first()
     if take_id is not None and take is None:
         raise ValueError("Ce take n'appartient pas à ce shot")
+    comment = str(comment or "").strip()
     if decision == "approve":
         if take is None or not take.uri:
             raise ValueError("Impossible de verrouiller un take sans vidéo")
@@ -1558,11 +1559,13 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
             take.save(update_fields=["status"])
         shot.status = Beat.Status.REJECTED
     else:
+        # A requested correction invalidates the previously approved production
+        # state. A stale locked take must never remain eligible for assembly.
+        shot.takes.filter(status=ShotTake.Status.LOCKED).update(status=ShotTake.Status.REVIEW)
         shot.status = Beat.Status.DRAFT
     shot.save(update_fields=["status"])
     Review.objects.create(episode=shot.beat.episode, beat=shot.beat, shot=shot, shot_take=take, decision=decision, comment=comment)
     return shot
-
 
 def render_shot(
     shot: Shot,
