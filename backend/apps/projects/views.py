@@ -443,12 +443,44 @@ class BeatViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Beat.objects.prefetch_related("assets").select_related("episode__season__project")
     serializer_class = BeatSerializer
 
+    @action(detail=True, methods=["post"], url_path="upload-scene-frame-reference")
+    def upload_scene_frame_reference(self, request, pk=None):
+        import uuid
+        from pathlib import Path
+        from django.conf import settings
+
+        beat = self.get_object()
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Ajoute une image de référence"}, status=status.HTTP_400_BAD_REQUEST)
+        content_type = str(getattr(upload, "content_type", "") or "")
+        if not content_type.startswith("image/"):
+            return Response({"detail": "La pièce jointe doit être une image"}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(upload, "size", 0) > 15 * 1024 * 1024:
+            return Response({"detail": "La pièce jointe est limitée à 15 Mo"}, status=status.HTTP_400_BAD_REQUEST)
+        suffix = Path(str(upload.name or "")).suffix.lower()
+        if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+            suffix = ".jpg"
+        project = beat.episode.season.project
+        relative = Path("scene-frame-refs") / f"{project.id}-{project.slug}" / f"beat-{beat.id}"
+        directory = Path(settings.MEDIA_ROOT) / relative
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / f"{uuid.uuid4().hex}{suffix}"
+        with target.open("wb") as handle:
+            for chunk in upload.chunks():
+                handle.write(chunk)
+        return Response({"uri": f"/media/{relative.as_posix()}/{target.name}", "name": upload.name}, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"], url_path="generate-scene-frame")
     def generate_scene_frame(self, request, pk=None):
         from apps.projects.visuals import generate_beat_scene_frame
         beat = self.get_object()
         try:
-            generate_beat_scene_frame(beat, request.data.get("prompt") or "")
+            generate_beat_scene_frame(
+                beat,
+                request.data.get("prompt") or "",
+                extra_reference_uri=request.data.get("reference_uri") or "",
+            )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         beat = self.get_queryset().get(pk=beat.pk)
