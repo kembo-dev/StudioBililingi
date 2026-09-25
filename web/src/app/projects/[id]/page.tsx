@@ -19,6 +19,9 @@ type Beat = {
   text: string;
   word_count: number;
   status: string;
+  speech_mode?: "silent" | "narration" | "dialogue" | "mixed";
+  narration?: string;
+  dialogue?: string;
   clip_uri?: string | null;
   ingredients?: { role?: string; name?: string; uri?: string }[];
   takes: BeatTake[];
@@ -639,6 +642,7 @@ export default function ProjectPage() {
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="rounded-full border border-[#2a2e38] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#9aa3b2]">Beat narratif</span>
+                        <span className="rounded-full border border-[#2a2e38] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#c5cad3]">{beat.speech_mode === "mixed" ? "🎙 Narration + dialogue" : beat.speech_mode === "narration" ? "🎙 Narration" : beat.speech_mode === "dialogue" ? "💬 Dialogue" : "🔇 Silence"}</span>
                         <button disabled={!beat.scene_frames?.[0]?.meta?.locked} onClick={() => run(`shots-${beat.id}`, `/api/beats/${beat.id}/plan-shots/`)} className="rounded border border-[#e8c36a] px-2 py-0.5 text-xs text-[#e8c36a] disabled:cursor-not-allowed disabled:opacity-35">{busy === `shots-${beat.id}` ? "…" : beat.shots?.length ? "Repréparer les shots" : "Préparer les shots"}</button>
                         {!beat.scene_frames?.[0]?.meta?.locked ? <span className="text-[10px] text-[#6f7785]">Verrouille d’abord l’image de scène.</span> : null}
                       </div>
