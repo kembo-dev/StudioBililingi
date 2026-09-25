@@ -10,7 +10,7 @@ class BeatSegmenter:
     target_words = 24
 
     def __init__(self):
-        self.text = get_text()
+        self.text = get_text(role=self.role)
 
     def segment(self, script: str, *, form: str = "storytell", bible: dict | None = None, feedback: str = "", narrative_contract: dict | None = None, scene_plan: list[dict] | None = None) -> dict:
         mode_rules = {
