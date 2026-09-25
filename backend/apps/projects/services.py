@@ -1786,6 +1786,7 @@ def render_shot(
             "adjustment_reference_uri": str(adjustment_reference_uri or "").strip() or None,
             "previous_take_frame": None,
             "scene_frame": package.get("scene_frame"),
+            "speech_mode": package.get("speech_mode", "silent"),
             "usage": {
                 "prompt_tokens_estimated": prompt_tokens_estimated,
                 "prompt_tokens_source": "utf8_chars_div_4_estimate",
