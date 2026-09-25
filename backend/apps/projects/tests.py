@@ -307,6 +307,20 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(take.generation_meta["previous_take_frame"], "/media/take-frames/previous.jpg")
         self.assertIn("caméra plus proche", take.prompt)
 
+    def test_shot_planner_empty_slot_falls_back_to_canonical_beat(self):
+        beat = persist_beats(self.episode, [{"text": "Action canonique", "duration_seconds": 12}])[0]
+        payload = {
+            "shots": [
+                {"text": "Premier plan", "video_prompt": "Premier plan visuel"},
+                {"text": "", "video_prompt": ""},
+            ]
+        }
+        with patch("agents.roles.shot_planner.ShotPlanner.plan", return_value=payload):
+            shots = plan_beat_shots(beat)
+        self.assertEqual(len(shots), 2)
+        self.assertEqual(shots[1].text, "Action canonique")
+        self.assertEqual(shots[1].video_prompt, "Action canonique")
+
     def test_shot_review_locks_exact_take(self):
         beat = persist_beats(self.episode, [{"text": "Beat narratif", "duration_seconds": 12}])[0]
         shot = plan_beat_shots(beat)[0]
