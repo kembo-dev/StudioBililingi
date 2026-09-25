@@ -17,6 +17,12 @@ export default function ProjectsPage() {
   const [concept, setConcept] = useState("");
   const [delivery, setDelivery] = useState("storytell");
   const [visualStyle, setVisualStyle] = useState("realistic");
+  const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [audioLanguage, setAudioLanguage] = useState("français");
+  const [narratorVoice, setNarratorVoice] = useState("");
+  const [narratorAccent, setNarratorAccent] = useState("français congolais");
+  const [narratorTone, setNarratorTone] = useState("chaleureuse et naturelle");
+  const [narratorPace, setNarratorPace] = useState("modéré");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [conceptMode, setConceptMode] = useState<"manual" | "ai">("manual");
@@ -46,7 +52,7 @@ export default function ProjectsPage() {
     try {
       const project = await api<Project>("/api/projects/", {
         method: "POST",
-        body: JSON.stringify({ title, concept, genre, subgenre, setting, tone, ending_intent: endingIntent, episode_count_target: episodeCount === "auto" ? null : Number(episodeCount), episode_duration_seconds: episodeDuration === "auto" ? null : Number(episodeDuration), delivery, visual_style: visualStyle }),
+        body: JSON.stringify({ title, concept, genre, subgenre, setting, tone, ending_intent: endingIntent, episode_count_target: episodeCount === "auto" ? null : Number(episodeCount), episode_duration_seconds: episodeDuration === "auto" ? null : Number(episodeDuration), aspect_ratio: aspectRatio, audio_language: audioLanguage, narrator_voice: narratorVoice, narrator_accent: narratorAccent, narrator_tone: narratorTone, narrator_pace: narratorPace, delivery, visual_style: visualStyle }),
       });
       window.location.href = `/projects/${project.id}`;
     } catch (err) {
@@ -153,6 +159,33 @@ export default function ProjectsPage() {
             ))}
           </div>
         </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-[#9aa3b2]">Format vidéo
+            <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white">
+              <option value="16:9">16:9 · Paysage / YouTube</option>
+              <option value="9:16">9:16 · Vertical / TikTok / Reels / Shorts</option>
+              <option value="1:1">1:1 · Carré</option>
+              <option value="4:5">4:5 · Portrait social</option>
+            </select>
+          </label>
+          <label className="block text-xs text-[#9aa3b2]">Langue parlée canonique
+            <input value={audioLanguage} onChange={(e) => setAudioLanguage(e.target.value)} className="mt-1 w-full rounded-lg border border-[#2a2e38] bg-[#0b0c10] px-3 py-2 text-sm text-white" />
+          </label>
+        </div>
+        {delivery === "voix_off" || delivery === "storytell" ? (
+          <div className="space-y-2 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-3">
+            <p className="text-sm font-medium text-[#e8c36a]">Voix du narrateur</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input placeholder="Ex. homme adulte, voix profonde" value={narratorVoice} onChange={(e) => setNarratorVoice(e.target.value)} className="rounded-lg border border-[#2a2e38] bg-[#14161c] px-3 py-2 text-sm text-white" />
+              <input placeholder="Accent" value={narratorAccent} onChange={(e) => setNarratorAccent(e.target.value)} className="rounded-lg border border-[#2a2e38] bg-[#14161c] px-3 py-2 text-sm text-white" />
+              <input placeholder="Tonalité" value={narratorTone} onChange={(e) => setNarratorTone(e.target.value)} className="rounded-lg border border-[#2a2e38] bg-[#14161c] px-3 py-2 text-sm text-white" />
+              <select value={narratorPace} onChange={(e) => setNarratorPace(e.target.value)} className="rounded-lg border border-[#2a2e38] bg-[#14161c] px-3 py-2 text-sm text-white">
+                <option value="lent">Débit lent</option><option value="modéré">Débit modéré</option><option value="rapide">Débit rapide</option>
+              </select>
+            </div>
+            <p className="text-[11px] text-[#9aa3b2]">Cette identité vocale est verrouillée pour toutes les narrations du projet. Les voix des personnages restent distinctes selon leur Bible.</p>
+          </div>
+        ) : null}
         <label className="block text-xs text-[#9aa3b2]">
           Style visuel de production
           <select
