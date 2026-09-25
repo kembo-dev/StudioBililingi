@@ -351,6 +351,34 @@ def _scene_contract_errors(rows: list[dict]) -> list[str]:
 
 
 @transaction.atomic
+def normalize_active_beat_indexes(episode: Episode) -> dict:
+    """Repair legacy index gaps without recreating any production object."""
+    script = episode.scripts.order_by("-version").first()
+    if script is None:
+        raise ValueError("Aucun script à normaliser")
+    segmentation = script.segmentations.order_by("-version").first()
+    beats_qs = segmentation.beats if segmentation else script.beats
+    beats = list(beats_qs.order_by("index", "id"))
+    before = [{"id": beat.id, "index": beat.index} for beat in beats]
+    expected = list(range(len(beats)))
+    if [beat.index for beat in beats] == expected:
+        return {"changed": False, "count": len(beats), "before": before, "after": before}
+
+    # Avoid the (segmentation, index) unique constraint while compacting indexes.
+    # IDs stay unchanged, therefore shots, takes, assets and reviews keep all FKs.
+    temporary_base = max([beat.index for beat in beats] + [0]) + len(beats) + 1000
+    for offset, beat in enumerate(beats):
+        beat.index = temporary_base + offset
+        beat.save(update_fields=["index"])
+    for index, beat in enumerate(beats):
+        beat.index = index
+        beat.save(update_fields=["index"])
+
+    after = [{"id": beat.id, "index": beat.index} for beat in beats]
+    return {"changed": True, "count": len(beats), "before": before, "after": after}
+
+
+@transaction.atomic
 def persist_beats(episode: Episode, chunks: list, *, script: Script | None = None, scene_plan: ScenePlan | None = None) -> list[Beat]:
     """Persist a new immutable segmentation version.
 
