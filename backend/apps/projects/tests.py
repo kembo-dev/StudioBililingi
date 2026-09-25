@@ -1105,3 +1105,40 @@ class BeatIndexContinuityTests(TestCase):
         ])
 
         self.assertEqual([beat.index for beat in beats], [0, 1])
+
+
+class LegacyBeatIndexRepairTests(TestCase):
+    def test_normalization_preserves_beat_shot_take_and_asset_ids(self):
+        from apps.production.models import Asset
+        from apps.projects.models import Organization, Project, Season
+        from apps.projects.services import normalize_active_beat_indexes
+        from apps.story.models import Beat, Episode, ScenePlan, Script, Segmentation, Shot, ShotTake
+
+        org = Organization.objects.create(name="Legacy Repair", slug="legacy-repair")
+        project = Project.objects.create(organization=org, title="Legacy", slug="legacy", concept="test")
+        season = Season.objects.create(project=project, number=1, title="S1")
+        episode = Episode.objects.create(season=season, number=1, title="E1", logline="test")
+        script = Script.objects.create(episode=episode, version=1, fountain="test")
+        plan = ScenePlan.objects.create(episode=episode, script=script, version=1, payload=[], locked=True)
+        segmentation = Segmentation.objects.create(episode=episode, script=script, scene_plan=plan, version=1, payload=[])
+        first = Beat.objects.create(episode=episode, script=script, segmentation=segmentation, index=0, text="A", word_count=1)
+        second = Beat.objects.create(episode=episode, script=script, segmentation=segmentation, index=2, text="B", word_count=1)
+        shot = Shot.objects.create(beat=second, index=1, text="B", duration_seconds=8, status=Beat.Status.LOCKED)
+        take = ShotTake.objects.create(shot=shot, number=1, uri="/media/locked.mp4", status=ShotTake.Status.LOCKED)
+        asset = Asset.objects.create(project=project, beat=second, kind=Asset.Kind.IMAGE, role=Asset.Role.START_FRAME, uri="/media/frame.jpg")
+
+        ids = (first.id, second.id, shot.id, take.id, asset.id)
+        result = normalize_active_beat_indexes(episode)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        shot.refresh_from_db()
+        take.refresh_from_db()
+        asset.refresh_from_db()
+        self.assertTrue(result["changed"])
+        self.assertEqual([first.index, second.index], [0, 1])
+        self.assertEqual((first.id, second.id, shot.id, take.id, asset.id), ids)
+        self.assertEqual(shot.beat_id, second.id)
+        self.assertEqual(take.shot_id, shot.id)
+        self.assertEqual(asset.beat_id, second.id)
+        self.assertEqual(take.status, ShotTake.Status.LOCKED)
