@@ -1549,9 +1549,53 @@ def _apply_structured_shot_revision(shot: Shot, comment: str) -> dict:
         "ne doit pas", "sans ", "retir", "enlever", "supprim", "pas de ",
         "ne porte pas", "ne pas porter", "ne devrait pas",
     )
-    result = {"removed_reference_uids": [], "removed_entities": [], "scene_frame_invalidated": False}
-    if not text or not any(cue in lowered for cue in removal_cues):
-        return result
+    identity_cues = (
+        "ne reflète pas", "ne reflete pas", "ne ressemble pas", "identique", "même visage", "meme visage",
+        "même personnage", "meme personnage", "respecte la ref", "respecter la ref", "référence personnage",
+        "reference personnage", "apparence", "visage", "teint", "peau", "ethnic", "origine",
+    )
+    result = {
+        "removed_reference_uids": [], "removed_entities": [], "priority_reference_uids": [],
+        "priority_entities": [], "scene_frame_invalidated": False,
+    }
+    if not text:
+        if is_identity:
+        character_candidates = [entity for entity in candidates if entity.__class__.__name__ == "Character"]
+        if not character_candidates and shot.beat.characters.count() == 1:
+            character_candidates = list(shot.beat.characters.all())
+        priority = []
+        for entity in character_candidates:
+            uid = str(getattr(entity, "reference_uid", "") or "")
+            if uid:
+                priority.append(uid)
+                result["priority_entities"].append({"key": entity.key, "name": entity.name, "reference_uid": uid})
+                if uid not in current:
+                    current.insert(0, uid)
+        if priority:
+            result["priority_reference_uids"] = priority
+            shot.reference_uids = priority + [uid for uid in current if uid not in priority]
+            continuity = dict(shot.continuity or {})
+            continuity["priority_reference_uids"] = priority
+            history = list(continuity.get("revision_constraints") or [])
+            history.append({
+                "type": "identity_lock",
+                "instruction": text,
+                "priority_reference_uids": priority,
+                "priority_entities": result["priority_entities"],
+            })
+            continuity["revision_constraints"] = history
+            shot.continuity = continuity
+            shot.save(update_fields=["reference_uids", "continuity"])
+            for frame in Asset.objects.filter(project=project, beat=shot.beat, role=Asset.Role.START_FRAME):
+                meta = dict(frame.meta or {})
+                if meta.get("locked"):
+                    meta["locked"] = False
+                    meta["invalidated_by_revision"] = text
+                    meta["invalidated_identity_reference_uids"] = priority
+                    frame.meta = meta
+                    frame.save(update_fields=["meta"])
+                    result["scene_frame_invalidated"] = True
+    return result
 
     project = shot.beat.episode.season.project
     candidates = []
@@ -1565,12 +1609,15 @@ def _apply_structured_shot_revision(shot: Shot, comment: str) -> dict:
             candidates.append(entity)
 
     current = list(shot.reference_uids or [])
-    for entity in candidates:
-        uid = str(getattr(entity, "reference_uid", "") or "")
-        if uid and uid in current:
-            current.remove(uid)
-            result["removed_reference_uids"].append(uid)
-            result["removed_entities"].append({"key": entity.key, "name": entity.name, "reference_uid": uid})
+    is_removal = any(cue in lowered for cue in removal_cues)
+    is_identity = any(cue in lowered for cue in identity_cues)
+    if is_removal:
+        for entity in candidates:
+            uid = str(getattr(entity, "reference_uid", "") or "")
+            if uid and uid in current:
+                current.remove(uid)
+                result["removed_reference_uids"].append(uid)
+                result["removed_entities"].append({"key": entity.key, "name": entity.name, "reference_uid": uid})
     if result["removed_reference_uids"]:
         shot.reference_uids = current
         continuity = dict(shot.continuity or {})
