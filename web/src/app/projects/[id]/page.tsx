@@ -9,7 +9,7 @@ import { api, mediaUrl } from "@/lib/api";
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
 type GenerationIngredient = { role?: string; key?: string; reference_uid?: string; uri?: string; name?: string };
 type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; previous_take_frame?: string | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string; adjustment_mode?: string; adjustment_reference_uri?: string | null } };
-type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; reference_uids?: string[]; status: string; clip_uri?: string | null; takes: ShotTake[] };
+type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; continuity?: { active_staging_instruction?: string; staging_revisions?: { instruction?: string; intent?: string; performance?: string; camera?: string; sound?: string }[] }; reference_uids?: string[]; status: string; clip_uri?: string | null; takes: ShotTake[] };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
   id: number;
@@ -681,6 +681,16 @@ export default function ProjectPage() {
                             </div>
                             {shotJobs[shot.id]?.status === "queued" || shotJobs[shot.id]?.status === "running" ? <div className="mt-2 rounded border border-[#e8c36a]/30 bg-[#e8c36a]/5 px-3 py-2 text-xs text-[#e8c36a]"><p>{shotJobs[shot.id]?.status === "queued" ? "Take en file d’attente. Tu peux continuer à travailler, cette zone se met à jour automatiquement." : "Veo génère le clip. La vidéo apparaîtra ici automatiquement dès qu’elle sera prête."}</p><div className="mt-2 h-1 overflow-hidden rounded bg-[#2a2e38]"><div className="h-full w-1/2 animate-pulse rounded bg-[#e8c36a]" /></div></div> : null}
                             {shotJobs[shot.id]?.status === "succeeded" ? <p className="mt-2 text-xs text-green-400">✓ Take généré. La vidéo est prête à être visionnée et verrouillée.</p> : null}
+                            {shot.continuity?.active_staging_instruction ? (
+                              <div className="mt-2 rounded-lg border border-[#e8c36a]/40 bg-[#e8c36a]/5 p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#e8c36a]">🎬 Nouvelle mise en scène active</p>
+                                  <span className="rounded-full border border-[#e8c36a]/30 px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-[#e8c36a]">Sera utilisée au prochain take</span>
+                                </div>
+                                <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[#c5cad3]">{shot.continuity.active_staging_instruction}</p>
+                                {shot.continuity.staging_revisions?.length ? <p className="mt-2 text-[10px] text-[#6f7785]">{shot.continuity.staging_revisions.length} révision(s) de mise en scène enregistrée(s)</p> : null}
+                              </div>
+                            ) : null}
                             <p className="mt-2 text-xs text-[#9aa3b2]">{shot.video_prompt || shot.text}</p>
                             {shot.reference_uids?.length ? (
                               <div className="mt-2 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-2">
