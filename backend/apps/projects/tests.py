@@ -1085,3 +1085,23 @@ class ProductionRevisionGateTests(TestCase):
         self.assertEqual(self.shot.continuity["revision_constraints"][-1]["type"], "identity_lock")
         self.assertFalse(frame.meta["locked"])
         self.assertEqual(frame.meta["invalidated_identity_reference_uids"], [character_uid])
+
+
+class BeatIndexContinuityTests(TestCase):
+    def test_persist_beats_skips_blank_rows_without_creating_index_gaps(self):
+        from apps.projects.models import Organization, Project, Season
+        from apps.projects.services import persist_beats
+        from apps.story.models import Episode
+
+        org = Organization.objects.create(name="Index Studio", slug="index-studio")
+        project = Project.objects.create(organization=org, title="Index Project", slug="index-project", concept="test")
+        season = Season.objects.create(project=project, number=1, title="S1")
+        episode = Episode.objects.create(season=season, number=1, title="E1", logline="test")
+
+        beats = persist_beats(episode, [
+            {"text": "Premier beat."},
+            {"text": "   "},
+            {"text": "Deuxième beat."},
+        ])
+
+        self.assertEqual([beat.index for beat in beats], [0, 1])
