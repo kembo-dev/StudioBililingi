@@ -14,7 +14,7 @@ class BeatRewriter:
     role = "beat_rewriter"
 
     def __init__(self):
-        self.text = get_text()
+        self.text = get_text(role=self.role)
 
     def rewrite(self, *, beat: str, instruction: str, concept: str, bible: dict, form: str = "storytell") -> dict:
         shape = FORMS.get(form, FORMS["storytell"])
