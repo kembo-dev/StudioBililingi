@@ -502,9 +502,15 @@ def persist_beats(episode: Episode, chunks: list, *, script: Script | None = Non
             duration_seconds=row.get("duration_seconds") or 8,
             location=location,
             camera=row.get("camera") if isinstance(row.get("camera"), dict) else {},
-            continuity=row.get("continuity") if isinstance(row.get("continuity"), dict) else {},
+            continuity={
+                **(row.get("continuity") if isinstance(row.get("continuity"), dict) else {}),
+                "audio": {
+                    "narration": str(row.get("narration") or "").strip(),
+                    "dialogue": str(row.get("dialogue") or "").strip(),
+                },
+            },
             emotion=_fit_model_text(Beat, "emotion", row.get("emotion") or ""),
-            dialogue=str(row.get("dialogue") or ""),
+            dialogue=str(row.get("dialogue") or row.get("narration") or ""),
             speaker_id=(
                 project.characters.filter(key=speaker.key).values_list("id", flat=True).first()
                 if speaker else None
@@ -1525,7 +1531,8 @@ def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
         payload = ShotPlanner().plan(
             beat={
                 "text": text,
-                "dialogue": beat.dialogue,
+                "dialogue": str((beat.continuity or {}).get("audio", {}).get("dialogue") or beat.dialogue or ""),
+                "narration": str((beat.continuity or {}).get("audio", {}).get("narration") or ""),
                 "video_prompt": beat.video_prompt,
                 "camera": beat.camera,
                 "continuity": beat.continuity,
