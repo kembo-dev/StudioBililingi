@@ -169,10 +169,27 @@ class EpisodeSerializer(serializers.ModelSerializer):
         beats = list(beats_qs.order_by("index").prefetch_related("shots__takes"))
         missing = []
         blockers = []
+        beat_progress = []
         total = 0
         locked = 0
         for beat in beats:
             shots = list(beat.shots.order_by("index"))
+            beat_total = len(shots)
+            beat_locked = sum(
+                1 for shot in shots
+                if shot.takes.filter(status=ShotTake.Status.LOCKED).exclude(uri="").exists()
+            )
+            beat_progress.append({
+                "beat_id": beat.id,
+                "beat_index": beat.index,
+                "total_shots": beat_total,
+                "locked_shots": beat_locked,
+                "status": (
+                    "locked" if beat_total > 0 and beat_locked == beat_total
+                    else "in_progress" if beat_total > 0
+                    else "not_prepared"
+                ),
+            })
             if not shots:
                 label = f"Beat {beat.index}: aucun shot"
                 missing.append(label)
@@ -214,6 +231,9 @@ class EpisodeSerializer(serializers.ModelSerializer):
             "locked_shots": locked,
             "missing": missing,
             "blockers": blockers,
+            "beat_progress": beat_progress,
+            "total_beats": len(beats),
+            "locked_beats": sum(1 for row in beat_progress if row["status"] == "locked"),
         }
 
 
