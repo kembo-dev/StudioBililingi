@@ -159,80 +159,68 @@ class EpisodeSerializer(serializers.ModelSerializer):
         return {"id": asset.id, "uri": asset.uri, "provider": asset.provider, "meta": asset.meta}
 
     def get_assembly_readiness(self, obj):
+        from apps.production.models import Review
         from apps.story.models import ShotTake
 
         script = self._latest(obj)
         if not script:
-            return {"ready": False, "total_shots": 0, "locked_shots": 0, "missing": ["Aucun script"]}
+            return {"ready": False, "total_shots": 0, "locked_shots": 0, "missing": ["Aucun script"], "blockers": [], "beat_progress": [], "total_beats": 0, "locked_beats": 0}
         segmentation = self._latest_segmentation(script)
         beats_qs = segmentation.beats if segmentation else script.beats
         beats = list(beats_qs.order_by("index").prefetch_related("shots__takes"))
-        missing = []
-        blockers = []
-        beat_progress = []
-        total = 0
-        locked = 0
+        missing, blockers, beat_progress = [], [], []
+        total = locked = 0
         for beat in beats:
             shots = list(beat.shots.order_by("index"))
             beat_total = len(shots)
-            beat_locked = sum(
-                1 for shot in shots
-                if shot.takes.filter(status=ShotTake.Status.LOCKED).exclude(uri="").exists()
-            )
-            beat_progress.append({
-                "beat_id": beat.id,
-                "beat_index": beat.index,
-                "total_shots": beat_total,
-                "locked_shots": beat_locked,
-                "status": (
-                    "locked" if beat_total > 0 and beat_locked == beat_total
-                    else "in_progress" if beat_total > 0
-                    else "not_prepared"
-                ),
-            })
+            beat_locked = 0
+            beat_has_revision = False
+            for shot in shots:
+                total += 1
+                latest_review = Review.objects.filter(shot=shot).order_by("-created_at", "-id").first()
+                revision_open = bool(latest_review and latest_review.decision == Review.Decision.REVISE)
+                locked_take = shot.takes.filter(status=ShotTake.Status.LOCKED).exclude(uri="").order_by("-number").first()
+                if locked_take and not revision_open:
+                    locked += 1
+                    beat_locked += 1
+                    continue
+                if revision_open:
+                    beat_has_revision = True
+                latest_take = shot.takes.exclude(uri="").order_by("-number").first()
+                label = f"Beat {beat.index} / Shot {shot.index}"
+                reason = "revision_required" if revision_open else ("take_not_locked" if latest_take else "missing_take")
+                missing.append(label)
+                blockers.append({
+                    "beat_id": beat.id, "beat_index": beat.index, "shot_id": shot.id, "shot_index": shot.index,
+                    "take_id": latest_take.id if latest_take else None,
+                    "take_number": latest_take.number if latest_take else None,
+                    "take_status": latest_take.status if latest_take else reason,
+                    "has_video": bool(latest_take and latest_take.uri),
+                    "reason": reason,
+                    "feedback": latest_review.comment if revision_open else "",
+                    "label": label,
+                })
             if not shots:
                 label = f"Beat {beat.index}: aucun shot"
                 missing.append(label)
                 blockers.append({
-                    "beat_id": beat.id,
-                    "beat_index": beat.index,
-                    "shot_id": None,
-                    "shot_index": None,
-                    "take_id": None,
-                    "take_number": None,
-                    "take_status": "missing_shot",
-                    "has_video": False,
-                    "label": label,
+                    "beat_id": beat.id, "beat_index": beat.index, "shot_id": None, "shot_index": None,
+                    "take_id": None, "take_number": None, "take_status": "missing_shot", "has_video": False,
+                    "reason": "missing_shot", "feedback": "", "label": label,
                 })
-                continue
-            for shot in shots:
-                total += 1
-                take = shot.takes.filter(status=ShotTake.Status.LOCKED).exclude(uri="").order_by("-number").first()
-                if take:
-                    locked += 1
-                    continue
-                latest_take = shot.takes.exclude(uri="").order_by("-number").first()
-                label = f"Beat {beat.index} / Shot {shot.index}"
-                missing.append(label)
-                blockers.append({
-                    "beat_id": beat.id,
-                    "beat_index": beat.index,
-                    "shot_id": shot.id,
-                    "shot_index": shot.index,
-                    "take_id": latest_take.id if latest_take else None,
-                    "take_number": latest_take.number if latest_take else None,
-                    "take_status": latest_take.status if latest_take else "missing_take",
-                    "has_video": bool(latest_take and latest_take.uri),
-                    "label": label,
-                })
+            beat_progress.append({
+                "beat_id": beat.id, "beat_index": beat.index, "total_shots": beat_total, "locked_shots": beat_locked,
+                "status": (
+                    "needs_revision" if beat_has_revision
+                    else "locked" if beat_total > 0 and beat_locked == beat_total
+                    else "in_progress" if beat_total > 0
+                    else "not_prepared"
+                ),
+            })
         return {
             "ready": bool(beats) and total > 0 and not missing,
-            "total_shots": total,
-            "locked_shots": locked,
-            "missing": missing,
-            "blockers": blockers,
-            "beat_progress": beat_progress,
-            "total_beats": len(beats),
+            "total_shots": total, "locked_shots": locked, "missing": missing, "blockers": blockers,
+            "beat_progress": beat_progress, "total_beats": len(beats),
             "locked_beats": sum(1 for row in beat_progress if row["status"] == "locked"),
         }
 
