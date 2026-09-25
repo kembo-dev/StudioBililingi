@@ -1537,7 +1537,13 @@ def plan_beat_shots(beat: Beat, *, max_shot_seconds: float = 8.0) -> list[Shot]:
         if not shot_text and video_prompt:
             shot_text = video_prompt
         if not shot_text:
-            raise ValueError(f"Shot Planner invalide: shot {index} sans contenu")
+            # Some model responses preserve the requested shot slot but leave
+            # its prose empty. Keep the deterministic production duration and
+            # derive a conservative visual instruction from the canonical Beat
+            # instead of making an otherwise valid plan unusable.
+            shot_text = text or str(beat.video_prompt or "").strip()
+        if not shot_text:
+            raise ValueError(f"Shot Planner invalide: shot {index} sans contenu canonique")
         # A silent visual shot may legitimately omit video_prompt. In that case
         # the canonical shot text itself is the visual directing instruction.
         if not video_prompt:
