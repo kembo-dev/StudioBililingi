@@ -706,7 +706,8 @@ class ProductionPipelineTests(TestCase):
         adjusted = shot_render_package(shot, adjustment_prompt="Cadre plus serré")
         self.assertEqual([item["reference_uid"] for item in adjusted["ingredients"]["items"]], shot.reference_uids)
         self.assertEqual(adjusted["previous_take"]["number"], 1)
-        self.assertIn("LANGUAGE LOCK", adjusted["prompt"])
+        self.assertIn("ONLY ALLOWED NARRATION (verbatim)", adjusted["prompt"])
+        self.assertIn("original language", adjusted["prompt"])
         self.assertIn("PREVIOUS TAKE CONTINUITY", adjusted["prompt"])
 
     def test_video_media_refs_prioritize_speaker_then_characters_then_location(self):
