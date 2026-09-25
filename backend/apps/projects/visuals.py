@@ -278,7 +278,20 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
     props = [{"key": p.key, "name": p.name, "look": p.look} for p in beat.props.all().order_by("key")]
     from apps.projects.continuity import resolve_ingredients
     ingredient_pack = resolve_ingredients(beat)
-    canonical_ref_uris = [row.get("uri") for row in ingredient_pack.get("items", []) if row.get("uri")]
+    priority_uids = []
+    priority_instructions = []
+    for shot in beat.shots.all().order_by("index"):
+        continuity = shot.continuity or {}
+        for uid in continuity.get("priority_reference_uids") or []:
+            if uid not in priority_uids:
+                priority_uids.append(uid)
+        for constraint in continuity.get("revision_constraints") or []:
+            if constraint.get("type") == "identity_lock" and constraint.get("instruction"):
+                priority_instructions.append(str(constraint["instruction"]))
+    by_uid = {str(row.get("reference_uid") or ""): row for row in ingredient_pack.get("items", [])}
+    ordered_items = [by_uid[uid] for uid in priority_uids if uid in by_uid]
+    ordered_items.extend(row for row in ingredient_pack.get("items", []) if row not in ordered_items)
+    canonical_ref_uris = [row.get("uri") for row in ordered_items if row.get("uri")]
     if not canonical_ref_uris:
         # Narrative/voice-over beats can legitimately have no entity explicitly
         # attached to the beat. Use the project's canonical visual library as
@@ -302,7 +315,13 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
         emotion=beat.emotion,
         project_key=f"{project.id}-{project.slug}",
         visual_style=project.visual_style,
-        custom_prompt=custom_prompt,
+        custom_prompt="\n".join(
+            [part for part in [
+                custom_prompt,
+                ("IDENTITY CORRECTION - PRIORITY: " + " | ".join(priority_instructions)) if priority_instructions else "",
+                "The first supplied character reference is the identity master. Match that exact person: same face, skin tone, age, hair and stable physical traits. Do not reinterpret ethnicity or appearance." if priority_uids else "",
+            ] if part]
+        ),
     )
     # Keep history for audit/review. Only one frame is marked locked at a time.
     Asset.objects.filter(project=project, beat=beat, role=Asset.Role.START_FRAME).update(
@@ -325,6 +344,8 @@ def generate_beat_scene_frame(beat, custom_prompt: str = ""):
             "prop_keys": [row["key"] for row in props],
             "source_reference_uids": [row.get("reference_uid") for row in ingredient_pack.get("items", []) if row.get("reference_uid")],
             "source_reference_uris": canonical_ref_uris,
+            "priority_reference_uids": priority_uids,
+            "identity_revision_instructions": priority_instructions,
             "visual_style": project.visual_style,
         },
     )
