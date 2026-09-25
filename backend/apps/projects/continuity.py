@@ -242,6 +242,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     previous_take = shot.takes.exclude(uri="").order_by("-number").first()
 
     adjustment = str(adjustment_prompt or "").strip()
+    speech_mode = _speech_mode(beat)
     visual_action = _veo_safe_visual_action(shot)
     lines = []
     if adjustment:
@@ -273,7 +274,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
         "The action/description text is silent directing metadata. It must NEVER be spoken, narrated, read aloud, lip-synced, or turned into dialogue by any character or off-screen voice.",
         "Do not add, translate, paraphrase or replace spoken dialogue.",
     ])
-    if beat.dialogue and _is_voice_over(beat):
+    if speech_mode == "narration":
         lines.extend([
             "SPEECH MODE: EXTERNAL VOICE-OVER NARRATION.",
             f'ONLY ALLOWED NARRATION (verbatim): "{beat.dialogue}"',
@@ -282,7 +283,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
             "Pronounce the canonical narration in its original language; when it is French, speak French naturally.",
             "Do not translate, paraphrase, summarize, improvise or add words before or after the canonical narration.",
         ])
-    elif beat.dialogue:
+    elif speech_mode == "dialogue":
         lines.extend([
             "SPEECH MODE: DIALOGUE ONLY.",
             f'ONLY ALLOWED SPOKEN WORDS (verbatim): "{beat.dialogue}"',
@@ -344,19 +345,33 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
             {"id": previous_take.id, "number": previous_take.number, "uri": previous_take.uri}
             if previous_take else None
         ),
+        "speech_mode": speech_mode,
     }
 
 
-def _is_voice_over(beat: Beat) -> bool:
-    """True when spoken beat text belongs to the external narrator, not an on-screen character."""
+def _speech_mode(beat: Beat) -> str:
+    """Classify beat audio without confusing project voice-over delivery with character dialogue."""
+    has_words = bool(str(beat.dialogue or "").strip())
+    if not has_words:
+        return "silent"
+    # A canonical speaker always wins: these words belong to the character,
+    # even in a project whose general delivery includes external voice-over.
+    if beat.speaker_id:
+        return "dialogue"
     project = beat.episode.season.project
     if project.delivery == "voix_off":
-        return True
+        return "narration"
     try:
         contract = project.narrative_contract
     except Exception:
-        return False
-    return contract.narrator == "external" and contract.point_of_view == "third_person"
+        return "dialogue"
+    if contract.narrator == "external" and contract.point_of_view == "third_person":
+        return "narration"
+    return "dialogue"
+
+
+def _is_voice_over(beat: Beat) -> bool:
+    return _speech_mode(beat) == "narration"
 
 
 def validate_render_readiness(beat: Beat) -> dict:
