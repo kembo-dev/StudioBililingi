@@ -243,6 +243,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
 
     adjustment = str(adjustment_prompt or "").strip()
     speech_mode = _speech_mode(beat)
+    beat_audio = _beat_audio(beat)
     visual_action = _veo_safe_visual_action(shot)
     lines = []
     if adjustment:
@@ -277,7 +278,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     if speech_mode == "narration":
         lines.extend([
             "SPEECH MODE: EXTERNAL VOICE-OVER NARRATION.",
-            f'ONLY ALLOWED NARRATION (verbatim): "{beat.dialogue}"',
+            f'ONLY ALLOWED NARRATION (verbatim): "{beat_audio["narration"]}"',
             "The narrator is external and off-screen. No visible character lip-syncs or speaks these words.",
             f"NARRATOR VOICE LOCK: voice={narrator_contract.get('voice') or 'project default'}; accent={narrator_contract.get('accent') or 'natural'}; tone={narrator_contract.get('tone') or 'natural'}; pace={narrator_contract.get('pace') or 'modéré'}. Keep the exact same narrator identity across every narrated shot.",
             "Pronounce the canonical narration in its original language; when it is French, speak French naturally.",
@@ -286,11 +287,21 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     elif speech_mode == "dialogue":
         lines.extend([
             "SPEECH MODE: DIALOGUE ONLY.",
-            f'ONLY ALLOWED SPOKEN WORDS (verbatim): "{beat.dialogue}"',
+            f'ONLY ALLOWED SPOKEN WORDS (verbatim): "{beat_audio["dialogue"]}"',
             "The canonical story/dialogue language is French when the supplied dialogue is French. Pronounce French text in French; never replace it with English or another language.",
             "No narration, no description, no improvised words, no extra words before or after the canonical dialogue.",
             "LANGUAGE LOCK: speak the canonical dialogue verbatim in its original language. "
             "Do not translate, paraphrase, summarize or switch language.",
+        ])
+    elif speech_mode == "mixed":
+        lines.extend([
+            "SPEECH MODE: NARRATION + CHARACTER DIALOGUE.",
+            f'ONLY ALLOWED NARRATION (verbatim): "{beat_audio["narration"]}"',
+            f'ONLY ALLOWED CHARACTER DIALOGUE (verbatim): "{beat_audio["dialogue"]}"',
+            "VOICE SEPARATION LOCK: narration is spoken only by the external off-screen narrator; character dialogue is spoken only by the canonical speaker.",
+            f"NARRATOR VOICE LOCK: voice={narrator_contract.get('voice') or 'project default'}; accent={narrator_contract.get('accent') or 'natural'}; tone={narrator_contract.get('tone') or 'natural'}; pace={narrator_contract.get('pace') or 'modéré'}.",
+            "Never swap narrator and character voices. Never make a visible character lip-sync the narration.",
+            "LANGUAGE LOCK: preserve both canonical texts verbatim in their original language. Do not translate, paraphrase, summarize or improvise.",
         ])
     else:
         lines.extend([
@@ -349,26 +360,33 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     }
 
 
-def _speech_mode(beat: Beat) -> str:
-    """Classify beat audio without confusing project voice-over delivery with character dialogue."""
-    has_words = bool(str(beat.dialogue or "").strip())
-    if not has_words:
-        return "silent"
-    # A canonical speaker always wins: these words belong to the character,
-    # even in a project whose general delivery includes external voice-over.
-    if beat.speaker_id:
-        return "dialogue"
-    project = beat.episode.season.project
-    if project.delivery == "voix_off":
-        return "narration"
-    try:
-        contract = project.narrative_contract
-    except Exception:
-        return "dialogue"
-    if contract.narrator == "external" and contract.point_of_view == "third_person":
-        return "narration"
-    return "dialogue"
+def _beat_audio(beat: Beat) -> dict:
+    audio = (beat.continuity or {}).get("audio") or {}
+    narration = str(audio.get("narration") or "").strip()
+    dialogue = str(audio.get("dialogue") or "").strip()
+    # Legacy beats stored their single spoken channel in beat.dialogue.
+    if not narration and not dialogue and beat.dialogue:
+        if beat.speaker_id:
+            dialogue = str(beat.dialogue).strip()
+        else:
+            project = beat.episode.season.project
+            if project.delivery == "voix_off":
+                narration = str(beat.dialogue).strip()
+            else:
+                dialogue = str(beat.dialogue).strip()
+    return {"narration": narration, "dialogue": dialogue}
 
+
+def _speech_mode(beat: Beat) -> str:
+    """Return silent, narration, dialogue or mixed from explicit beat audio channels."""
+    audio = _beat_audio(beat)
+    if audio["narration"] and audio["dialogue"]:
+        return "mixed"
+    if audio["narration"]:
+        return "narration"
+    if audio["dialogue"]:
+        return "dialogue"
+    return "silent"
 
 def _is_voice_over(beat: Beat) -> bool:
     return _speech_mode(beat) == "narration"
@@ -385,8 +403,9 @@ def validate_render_readiness(beat: Beat) -> dict:
     scene_frame = beat.assets.filter(role=Asset.Role.START_FRAME, meta__locked=True).order_by("-id").first()
     if scene_frame is None:
         errors.append("image de scène du beat absente ou non verrouillée")
-    if beat.dialogue and not beat.speaker_id and not _is_voice_over(beat):
-        errors.append("dialogue sans speaker canonique")
+    beat_audio = _beat_audio(beat)
+    if beat_audio["dialogue"] and not beat.speaker_id:
+        errors.append("dialogue personnage sans speaker canonique")
     if beat.location_id and not any(
         item["role"] == Asset.Role.LOCATION_REF for item in pack["items"]
     ):
