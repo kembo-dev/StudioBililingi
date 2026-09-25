@@ -273,11 +273,42 @@ class ProjectSerializer(serializers.ModelSerializer):
     bibles = WorldBibleSerializer(many=True, read_only=True)
     refs = serializers.SerializerMethodField()
     narrative_contract = NarrativeContractSerializer(read_only=True)
+    usage = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
-        fields = ("id", "title", "slug", "concept", "genre", "subgenre", "setting", "tone", "ending_intent", "episode_count_target", "episode_duration_seconds", "aspect_ratio", "audio_contract", "delivery", "visual_style", "status", "created_at", "narrative_contract", "seasons", "bibles", "refs")
+        fields = ("id", "title", "slug", "concept", "genre", "subgenre", "setting", "tone", "ending_intent", "episode_count_target", "episode_duration_seconds", "aspect_ratio", "audio_contract", "delivery", "visual_style", "status", "created_at", "narrative_contract", "seasons", "bibles", "refs", "usage")
         read_only_fields = ("slug", "status", "created_at")
+
+    def get_usage(self, obj):
+        totals = {"prompt_tokens_estimated": 0, "video_generations": 0, "video_regenerations": 0, "failed_video_generations": 0, "video_seconds_requested": 0.0, "video_seconds_successful": 0.0}
+        episodes = []
+        for season in obj.seasons.all().order_by("number"):
+            for episode in season.episodes.all().order_by("number"):
+                script = episode.scripts.order_by("-version").first()
+                segmentation = script.segmentations.order_by("-version").first() if script else None
+                beats = list((segmentation.beats if segmentation else script.beats).order_by("index")) if script else []
+                row = {"episode_id": episode.id, "episode_number": episode.number, "title": episode.title, **{key: 0 for key in totals}}
+                row["video_seconds_requested"] = 0.0
+                row["video_seconds_successful"] = 0.0
+                for beat in beats:
+                    for shot in beat.shots.all():
+                        takes = list(shot.takes.all())
+                        row["video_regenerations"] += max(0, len(takes) - 1)
+                        for take in takes:
+                            usage = (take.generation_meta or {}).get("usage") or {}
+                            seconds = float(usage.get("video_seconds_requested") or 0)
+                            row["prompt_tokens_estimated"] += int(usage.get("prompt_tokens_estimated") or 0)
+                            row["video_generations"] += 1
+                            row["video_seconds_requested"] += seconds
+                            if take.status == ShotTake.Status.FAILED:
+                                row["failed_video_generations"] += 1
+                            elif take.uri:
+                                row["video_seconds_successful"] += seconds
+                episodes.append(row)
+                for key in totals:
+                    totals[key] += row[key]
+        return {**totals, "episodes": episodes, "note": "Tokens = estimation du prompt texte; vidéo = générations et secondes suivies séparément."}
 
     def get_refs(self, obj):
         roles = {"character_ref", "location_ref", "prop_ref"}
