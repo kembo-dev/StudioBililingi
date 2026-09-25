@@ -234,6 +234,17 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
             "Apply this requested camera/acting/lighting/staging change visibly in the generated take while preserving all canonical identity, story and dialogue locks below.",
             "",
         ])
+    revision_constraints = list((shot.continuity or {}).get("revision_constraints") or [])
+    if revision_constraints:
+        lines.extend(["HUMAN REVISION CONSTRAINTS - MANDATORY:"])
+        for constraint in revision_constraints:
+            instruction = str(constraint.get("instruction") or "").strip()
+            if instruction:
+                lines.append(f"- {instruction}")
+        lines.extend([
+            "These corrections override older staging details. Do not reintroduce removed props, wardrobe or visual elements.",
+            "",
+        ])
     lines.extend([
         "VISUAL ACTION ONLY - NEVER SPEAK OR NARRATE THIS TEXT:",
         visual_action,
