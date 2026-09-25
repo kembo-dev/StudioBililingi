@@ -237,6 +237,8 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
     pack = resolve_ingredients(beat, reference_uids=shot.reference_uids)
     scene_frame = beat.assets.filter(role=Asset.Role.START_FRAME, meta__locked=True).order_by("-id").first()
     project = beat.episode.season.project
+    audio_contract = project.audio_contract or {}
+    narrator_contract = audio_contract.get("narrator") or {}
     previous_take = shot.takes.exclude(uri="").order_by("-number").first()
 
     adjustment = str(adjustment_prompt or "").strip()
