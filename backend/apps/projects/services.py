@@ -391,10 +391,13 @@ def persist_beats(episode: Episode, chunks: list, *, script: Script | None = Non
     scenes: dict[int, Scene] = {}
     resolver = CharacterResolver(project)
 
-    for index, row in enumerate(rows):
+    beat_index = 0
+    for row in rows:
         text = str(row.get("text") or "").strip()
         if not text:
             continue
+        index = beat_index
+        beat_index += 1
         raw_scene_index = row.get("scene_index") or 1
         try:
             scene_index = int(raw_scene_index)
