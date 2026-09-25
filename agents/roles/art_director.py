@@ -26,7 +26,7 @@ class ArtDirector:
     role = "art_director"
 
     def __init__(self):
-        self.image = get_image()
+        self.image = get_image(role=self.role)
 
     def character_ref(self, *, name: str, look: str, role: str, project_key: str | None = None, visual_style: str = "realistic", custom_prompt: str = "") -> str:
         return self.image.generate(
