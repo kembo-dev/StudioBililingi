@@ -1761,6 +1761,11 @@ def render_shot(
     number = (shot.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
     prompt = package["prompt"]
     pack = package["ingredients"]
+    # Veo does not expose text-model style billing tokens for video generation.
+    # Keep an explicit estimate for prompt complexity and track video usage in
+    # requested seconds/generations separately so the UI never presents a fake
+    # provider token count.
+    prompt_tokens_estimated = max(1, (len(prompt.encode("utf-8")) + 3) // 4)
     take = ShotTake.objects.create(
         shot=shot,
         number=number,
@@ -1781,6 +1786,13 @@ def render_shot(
             "adjustment_reference_uri": str(adjustment_reference_uri or "").strip() or None,
             "previous_take_frame": None,
             "scene_frame": package.get("scene_frame"),
+            "usage": {
+                "prompt_tokens_estimated": prompt_tokens_estimated,
+                "prompt_tokens_source": "utf8_chars_div_4_estimate",
+                "video_generations": 1,
+                "video_seconds_requested": float(shot.duration_seconds),
+                "provider_usage_tokens": None,
+            },
         },
     )
     backend = get_video()
@@ -1845,6 +1857,7 @@ def render_shot(
             "previous_take": package.get("previous_take"),
             "language_locked": bool(shot.beat.dialogue),
             "dialogue_language_policy": "exact_original_language",
+            "usage": (take.generation_meta or {}).get("usage", {}),
         },
     )
     shot.status = Beat.Status.REVIEW
