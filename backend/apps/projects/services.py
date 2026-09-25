@@ -1559,8 +1559,8 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
             take.save(update_fields=["status"])
         shot.status = Beat.Status.REJECTED
     else:
-        # A requested correction invalidates the previously approved production
-        # state. A stale locked take must never remain eligible for assembly.
+        # A correction invalidates the approved production state. A stale
+        # locked take must never remain eligible for final assembly.
         shot.takes.filter(status=ShotTake.Status.LOCKED).update(status=ShotTake.Status.REVIEW)
         shot.status = Beat.Status.DRAFT
     shot.save(update_fields=["status"])
