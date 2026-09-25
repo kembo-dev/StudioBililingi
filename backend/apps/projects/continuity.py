@@ -93,6 +93,8 @@ def continuity_prompt(beat: Beat, context: dict) -> str:
     from agents.roles.art_director import visual_style_prompt
 
     project = beat.episode.season.project
+    audio_contract = project.audio_contract or {}
+    narrator_contract = audio_contract.get("narrator") or {}
     lines = [
         beat.video_prompt or beat.text,
         "",
@@ -100,6 +102,11 @@ def continuity_prompt(beat: Beat, context: dict) -> str:
         "Never drift to another rendering medium or visual style between shots.",
         "",
         "CONTINUITY LOCK - preserve exactly across shots:",
+        "",
+        "AUDIO CONTINUITY LOCK:",
+        f"Canonical spoken language: {audio_contract.get('language') or 'français'}.",
+        f"Narrator voice: {narrator_contract.get('voice') or 'project default'}; accent: {narrator_contract.get('accent') or 'natural'}; tone: {narrator_contract.get('tone') or 'natural'}; pace: {narrator_contract.get('pace') or 'modéré'}.",
+        "Every recurring character must keep the same canonical voice description across all shots. Never swap a character voice with the narrator voice.",
     ]
     location = context.get("location")
     if location:
@@ -269,6 +276,7 @@ def shot_render_package(shot, adjustment_prompt: str = "") -> dict:
             "SPEECH MODE: EXTERNAL VOICE-OVER NARRATION.",
             f'ONLY ALLOWED NARRATION (verbatim): "{beat.dialogue}"',
             "The narrator is external and off-screen. No visible character lip-syncs or speaks these words.",
+            f"NARRATOR VOICE LOCK: voice={narrator_contract.get('voice') or 'project default'}; accent={narrator_contract.get('accent') or 'natural'}; tone={narrator_contract.get('tone') or 'natural'}; pace={narrator_contract.get('pace') or 'modéré'}. Keep the exact same narrator identity across every narrated shot.",
             "Pronounce the canonical narration in its original language; when it is French, speak French naturally.",
             "Do not translate, paraphrase, summarize, improvise or add words before or after the canonical narration.",
         ])
