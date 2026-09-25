@@ -38,7 +38,7 @@ type Episode = {
   scenes: Scene[];
   scene_plans: ScenePlan[];
   episode_cut?: { id: number; uri: string; provider: string; meta?: Record<string, unknown> } | null;
-  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; total_beats?: number; locked_beats?: number; missing: string[]; beat_progress?: { beat_id: number; beat_index: number; total_shots: number; locked_shots: number; status: "locked" | "in_progress" | "not_prepared" }[]; blockers?: { beat_id: number; beat_index: number; shot_id: number | null; shot_index: number | null; take_id: number | null; take_number: number | null; take_status: string; has_video: boolean; label: string }[] };
+  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; total_beats?: number; locked_beats?: number; missing: string[]; beat_progress?: { beat_id: number; beat_index: number; total_shots: number; locked_shots: number; status: "locked" | "needs_revision" | "in_progress" | "not_prepared" }[]; blockers?: { beat_id: number; beat_index: number; shot_id: number | null; shot_index: number | null; take_id: number | null; take_number: number | null; take_status: string; has_video: boolean; reason?: string; feedback?: string; label: string }[] };
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; key: string; name: string; look: string };
@@ -444,7 +444,7 @@ export default function ProjectPage() {
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       {ep.assembly_readiness.beat_progress.map((item) => (
-                        <button key={item.beat_id} type="button" onClick={() => document.getElementById(`beat-${item.beat_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} className={`flex items-center justify-between rounded border px-3 py-2 text-left transition hover:bg-white/5 ${item.status === "locked" ? "border-green-500/40 bg-green-500/5" : item.status === "in_progress" ? "border-amber-400/40 bg-amber-400/5" : "border-[#2a2e38] bg-[#14161c]"}`}>
+                        <button key={item.beat_id} type="button" onClick={() => document.getElementById(`beat-${item.beat_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} className={`flex items-center justify-between rounded border px-3 py-2 text-left transition hover:bg-white/5 ${item.status === "locked" ? "border-green-500/40 bg-green-500/5" : item.status === "needs_revision" ? "border-red-400/40 bg-red-400/5" : item.status === "in_progress" ? "border-amber-400/40 bg-amber-400/5" : "border-[#2a2e38] bg-[#14161c]"}`}>
                           <span>
                             <span className="block text-xs text-white">Beat {item.beat_index}</span>
                             <span className="block text-[10px] text-[#9aa3b2]">{item.total_shots ? `${item.locked_shots}/${item.total_shots} shots verrouillés` : "Shots non préparés"}</span>
@@ -470,7 +470,7 @@ export default function ProjectPage() {
                           <div>
                             <p className="text-xs text-white">{item.label}</p>
                             <p className="text-[10px] text-[#9aa3b2]">
-                              {item.take_number ? `Take ${item.take_number} · ${item.take_status}` : item.shot_id ? "Aucun take vidéo disponible" : "Shots non préparés"}
+                              {item.reason === "revision_required" ? `Correction ouverte${item.feedback ? ` · ${item.feedback}` : ""}` : item.take_number ? `Take ${item.take_number} · ${item.take_status}` : item.shot_id ? "Aucun take vidéo disponible" : "Shots non préparés"}
                             </p>
                           </div>
                           {item.shot_id ? (
