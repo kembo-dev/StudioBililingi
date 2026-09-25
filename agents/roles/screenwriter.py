@@ -7,7 +7,7 @@ class Screenwriter:
     role = "screenwriter"
 
     def __init__(self):
-        self.text = get_text()
+        self.text = get_text(role=self.role)
 
     def write(
         self,
