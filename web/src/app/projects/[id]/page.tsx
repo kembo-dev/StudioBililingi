@@ -38,7 +38,7 @@ type Episode = {
   scenes: Scene[];
   scene_plans: ScenePlan[];
   episode_cut?: { id: number; uri: string; provider: string; meta?: Record<string, unknown> } | null;
-  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; missing: string[]; blockers?: { beat_id: number; beat_index: number; shot_id: number | null; shot_index: number | null; take_id: number | null; take_number: number | null; take_status: string; has_video: boolean; label: string }[] };
+  assembly_readiness?: { ready: boolean; total_shots: number; locked_shots: number; total_beats?: number; locked_beats?: number; missing: string[]; beat_progress?: { beat_id: number; beat_index: number; total_shots: number; locked_shots: number; status: "locked" | "in_progress" | "not_prepared" }[]; blockers?: { beat_id: number; beat_index: number; shot_id: number | null; shot_index: number | null; take_id: number | null; take_number: number | null; take_status: string; has_video: boolean; label: string }[] };
 };
 type Character = { id: number; key: string; name: string; role: string; look: string };
 type Location = { id: number; key: string; name: string; look: string };
@@ -431,6 +431,30 @@ export default function ProjectPage() {
                   </div>
                   {ep.assembly_readiness?.ready ? <span className="text-xs text-green-400">✓ prêt à assembler</span> : <span className="text-xs text-amber-300">Verrouille tous les takes avant l’assemblage</span>}
                 </div>
+                {ep.assembly_readiness?.beat_progress?.length ? (
+                  <div className="mt-3 rounded-lg border border-[#2a2e38] bg-[#0b0c10] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-medium text-white">Progression des beats</p>
+                        <p className="text-[10px] text-[#9aa3b2]">{ep.assembly_readiness.locked_beats ?? 0}/{ep.assembly_readiness.total_beats ?? ep.assembly_readiness.beat_progress.length} beats prêts pour le montage</p>
+                      </div>
+                      <div className="h-1.5 w-40 overflow-hidden rounded bg-[#2a2e38]">
+                        <div className="h-full rounded bg-green-500 transition-all" style={{ width: `${Math.round(((ep.assembly_readiness.locked_beats ?? 0) / Math.max(1, ep.assembly_readiness.total_beats ?? ep.assembly_readiness.beat_progress.length)) * 100)}%` }} />
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {ep.assembly_readiness.beat_progress.map((item) => (
+                        <button key={item.beat_id} type="button" onClick={() => document.getElementById(`beat-${item.beat_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} className={`flex items-center justify-between rounded border px-3 py-2 text-left transition hover:bg-white/5 ${item.status === "locked" ? "border-green-500/40 bg-green-500/5" : item.status === "in_progress" ? "border-amber-400/40 bg-amber-400/5" : "border-[#2a2e38] bg-[#14161c]"}`}>
+                          <span>
+                            <span className="block text-xs text-white">Beat {item.beat_index}</span>
+                            <span className="block text-[10px] text-[#9aa3b2]">{item.total_shots ? `${item.locked_shots}/${item.total_shots} shots verrouillés` : "Shots non préparés"}</span>
+                          </span>
+                          <span className={`text-[10px] font-medium ${item.status === "locked" ? "text-green-400" : item.status === "in_progress" ? "text-amber-300" : "text-[#6f7785]"}`}>{item.status === "locked" ? "✓ PRÊT" : item.status === "in_progress" ? "EN COURS" : "À FAIRE"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {!ep.assembly_readiness?.ready && ep.assembly_readiness?.blockers?.length ? (
                   <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
