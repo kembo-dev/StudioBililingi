@@ -623,6 +623,16 @@ export default function ProjectPage() {
                               <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadSceneFrameRef(beat.id, file); e.currentTarget.value = ""; }} />
                             </label>
                             <button type="button" disabled={busy === `scene-frame-${beat.id}` || busy === `upload-scene-frame-ref-${beat.id}`} onClick={() => regenerateSceneFrame(beat.id)} className="rounded border border-[#e8c36a] px-2 py-1 text-xs text-[#e8c36a] disabled:opacity-40">{busy === `scene-frame-${beat.id}` ? "Envoi…" : "Envoyer"}</button>
+                            {sceneFrameRefs[beat.id] ? (
+                              <div className="flex w-full items-center gap-2 rounded-lg border border-[#2a2e38] bg-[#14161c] p-2">
+                                <img src={mediaUrl(sceneFrameRefs[beat.id].uri)} alt="Référence temporaire" className="h-14 w-14 shrink-0 rounded border border-[#2a2e38] object-cover" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs text-[#c5cad3]">{sceneFrameRefs[beat.id].name}</p>
+                                  <span className="mt-1 inline-block rounded-full border border-amber-400/40 px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-amber-300">Référence temporaire</span>
+                                </div>
+                                <button type="button" onClick={() => setSceneFrameRefs((current) => { const next = { ...current }; delete next[beat.id]; return next; })} className="rounded border border-red-500/40 px-2 py-1 text-[10px] text-red-300">✕ Retirer</button>
+                              </div>
+                            ) : null}
                             {!beat.scene_frames[0].meta?.locked ? <button type="button" onClick={() => run(`lock-frame-${beat.id}`, `/api/beats/${beat.id}/lock-scene-frame/`, { asset_id: beat.scene_frames?.[0]?.id })} className="rounded border border-green-500/60 px-2 py-1 text-xs text-green-400">{busy === `lock-frame-${beat.id}` ? "…" : "✓ Verrouiller l’image"}</button> : <span className="self-center text-xs text-green-400">✓ Image de scène verrouillée · prête comme ref vidéo</span>}
                           </div>
                         </div> : <p className="mt-2 text-[10px] text-amber-300">Étape suivante : génère l’image de scène depuis les références du beat.</p>}
