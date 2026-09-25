@@ -137,12 +137,14 @@ def project_constraints_payload(project: Project) -> dict:
         "setting": project.setting,
         "episode_count_target": project.episode_count_target,
         "episode_duration_seconds": project.episode_duration_seconds,
+        "aspect_ratio": project.aspect_ratio,
+        "audio_contract": project.audio_contract,
         "delivery": project.delivery,
         "visual_style": project.visual_style,
     }
 
 
-def create_project(*, title: str, concept: str, genre: str = "", subgenre: str = "", setting: str = "", tone: str = "", ending_intent: str = "", episode_count_target: int | None = None, episode_duration_seconds: int | None = None, delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
+def create_project(*, title: str, concept: str, genre: str = "", subgenre: str = "", setting: str = "", tone: str = "", ending_intent: str = "", episode_count_target: int | None = None, episode_duration_seconds: int | None = None, aspect_ratio: str = "16:9", audio_language: str = "français", narrator_voice: str = "", narrator_accent: str = "", narrator_tone: str = "", narrator_pace: str = "modéré", delivery: str = "storytell", visual_style: str = Project.VisualStyle.REALISTIC, organization_name: str = "Studio") -> Project:
     org = _ensure_org(organization_name)
     base = slugify(title) or "projet"
     slug = base
@@ -152,7 +154,20 @@ def create_project(*, title: str, concept: str, genre: str = "", subgenre: str =
         n += 1
     project = Project.objects.create(
         organization=org, title=title, slug=slug, concept=concept,
-        genre=genre, subgenre=subgenre, setting=setting, tone=tone, ending_intent=ending_intent, episode_count_target=episode_count_target, episode_duration_seconds=episode_duration_seconds, delivery=delivery, visual_style=visual_style, status=Project.Status.ACTIVE,
+        genre=genre, subgenre=subgenre, setting=setting, tone=tone, ending_intent=ending_intent, episode_count_target=episode_count_target, episode_duration_seconds=episode_duration_seconds,
+        aspect_ratio=aspect_ratio,
+        audio_contract={
+            "language": str(audio_language or "français").strip(),
+            "narrator": {
+                "enabled": delivery in {"storytell", "voix_off"},
+                "voice": str(narrator_voice or "").strip(),
+                "accent": str(narrator_accent or "").strip(),
+                "tone": str(narrator_tone or "").strip(),
+                "pace": str(narrator_pace or "modéré").strip(),
+            },
+            "character_voice_lock": True,
+        },
+        delivery=delivery, visual_style=visual_style, status=Project.Status.ACTIVE,
     )
     Season.objects.create(project=project, number=1, title="Saison 1", premise=concept[:400])
     return project
