@@ -7,7 +7,7 @@ class WorldBibleAgent:
     role = "world_bible"
 
     def __init__(self):
-        self.text = get_text()
+        self.text = get_text(role=self.role)
 
     def draft(self, concept: str, *, delivery: str = "storytell", project_constraints: dict | None = None) -> dict:
         conversation_rule = (
