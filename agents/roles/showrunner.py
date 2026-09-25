@@ -9,7 +9,7 @@ class Showrunner:
     role = "showrunner"
 
     def __init__(self):
-        self.text = get_text()
+        self.text = get_text(role=self.role)
 
     def plan(self, concept: str, *, delivery: str = "storytell", bible: dict | None = None) -> dict:
         return self.text.generate_json(
