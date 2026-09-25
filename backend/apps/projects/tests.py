@@ -1032,3 +1032,30 @@ class ProductionRevisionGateTests(TestCase):
         self.assertEqual(readiness["beat_progress"][0]["status"], "needs_revision")
         self.assertEqual(readiness["blockers"][0]["reason"], "revision_required")
         self.assertEqual(readiness["blockers"][0]["feedback"], "Retirer le cartable")
+
+
+    def test_revision_can_remove_prop_ref_and_invalidate_scene_frame(self):
+        from apps.production.models import Asset
+        from apps.projects.services import review_shot
+        from apps.story.models import ShotTake
+
+        prop = self.project.props.create(key="cartable", name="Le Cartable", look="cartable scolaire")
+        prop_uid = prop.reference_uid
+        self.shot.reference_uids = [prop_uid]
+        self.shot.save(update_fields=["reference_uids"])
+        frame = Asset.objects.create(
+            project=self.project, beat=self.beat, kind=Asset.Kind.IMAGE,
+            role=Asset.Role.START_FRAME, uri="/media/frame.jpg",
+            meta={"scene_frame": True, "locked": True, "source_reference_uids": [prop_uid]},
+        )
+
+        review_shot(self.shot, "revise", "Elle ne doit pas porter Le Cartable ici", take_id=self.take.id)
+
+        self.shot.refresh_from_db()
+        self.take.refresh_from_db()
+        frame.refresh_from_db()
+        self.assertNotIn(prop_uid, self.shot.reference_uids)
+        self.assertEqual(self.take.status, ShotTake.Status.REVIEW)
+        self.assertFalse(frame.meta["locked"])
+        self.assertTrue(frame.meta["invalidated_by_revision"])
+        self.assertEqual(self.shot.continuity["revision_constraints"][-1]["type"], "remove_reference")
