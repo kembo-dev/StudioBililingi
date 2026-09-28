@@ -1808,20 +1808,38 @@ def _production_preflight(shot: Shot, package: dict) -> dict:
         audio_contract=project.audio_contract or {},
         speaker=context.get("speaker"),
     )
-    continuity_review = ContinuitySupervisor().inspect(
+    supervisor = ContinuitySupervisor()
+    continuity_review = supervisor.inspect(
         shot=shot_payload,
         continuity=context,
         references=pack.get("items", []),
         scene_frame=scene_frame,
     )
+    scene_frame_review = supervisor.inspect_scene_frame(
+        shot={
+            **shot_payload,
+            "visual_action": _veo_safe_visual_action(shot),
+        },
+        scene_frame=scene_frame,
+    )
     errors = [str(item) for item in continuity_review.get("errors") or [] if str(item).strip()]
     errors.extend(str(item) for item in voice_direction.get("errors") or [] if str(item).strip())
+    if scene_frame_review.get("suitable") is False:
+        scene_errors = [
+            str(item).strip()
+            for item in (scene_frame_review.get("errors") or [])
+            if str(item).strip()
+        ]
+        if not scene_errors:
+            scene_errors = ["la Scene Frame verrouillée contredit visuellement le shot à produire"]
+        errors.extend("Scene Frame incompatible: " + item for item in scene_errors)
     if errors:
         raise ValueError("Contrôle de production refusé: " + "; ".join(errors))
     return {
         "video_director": video_direction,
         "voice_director": voice_direction,
         "continuity_supervisor": continuity_review,
+        "scene_frame_review": scene_frame_review,
     }
 
 
