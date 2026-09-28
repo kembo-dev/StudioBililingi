@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 
 from django.db import transaction
@@ -1748,6 +1750,69 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
     Review.objects.create(episode=shot.beat.episode, beat=shot.beat, shot=shot, shot_take=take, decision=decision, comment=comment)
     return shot
 
+
+def _production_agents_enabled() -> bool:
+    return os.getenv("STUDIO_PRODUCTION_AGENTS", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _production_preflight(shot: Shot, package: dict) -> dict:
+    """Run optional directing/audio/continuity agents before an expensive video generation."""
+    if not _production_agents_enabled():
+        return {}
+
+    from agents.roles.continuity_supervisor import ContinuitySupervisor
+    from agents.roles.video_director import VideoDirector
+    from agents.roles.voice_director import VoiceDirector
+
+    beat = shot.beat
+    project = package["project"]
+    context = package["context"]
+    pack = package["ingredients"]
+    scene_frame = package.get("scene_frame") or {}
+    shot_payload = {
+        "id": shot.id,
+        "index": shot.index,
+        "text": shot.text,
+        "video_prompt": shot.video_prompt,
+        "camera": shot.camera,
+        "continuity": shot.continuity,
+        "duration_seconds": float(shot.duration_seconds),
+        "reference_uids": list(shot.reference_uids or []),
+    }
+    constraints = list((shot.continuity or {}).get("revision_constraints") or [])
+    video_direction = VideoDirector().direct(
+        shot=shot_payload,
+        continuity=context,
+        constraints=constraints,
+    )
+    voice_direction = VoiceDirector().direct(
+        beat={
+            "id": beat.id,
+            "text": beat.text,
+            "dialogue": beat.dialogue,
+            "continuity": beat.continuity,
+            "speaker_id": beat.speaker_id,
+        },
+        audio_contract=project.audio_contract or {},
+        speaker=context.get("speaker"),
+    )
+    continuity_review = ContinuitySupervisor().inspect(
+        shot=shot_payload,
+        continuity=context,
+        references=pack.get("items", []),
+        scene_frame=scene_frame,
+    )
+    errors = [str(item) for item in continuity_review.get("errors") or [] if str(item).strip()]
+    errors.extend(str(item) for item in voice_direction.get("errors") or [] if str(item).strip())
+    if errors:
+        raise ValueError("Contrôle de production refusé: " + "; ".join(errors))
+    return {
+        "video_director": video_direction,
+        "voice_director": voice_direction,
+        "continuity_supervisor": continuity_review,
+    }
+
+
 def render_shot(
     shot: Shot,
     *,
@@ -1768,6 +1833,14 @@ def render_shot(
     number = (shot.takes.order_by("-number").values_list("number", flat=True).first() or 0) + 1
     prompt = package["prompt"]
     pack = package["ingredients"]
+    agent_preflight = _production_preflight(shot, package)
+    if agent_preflight:
+        prompt = (
+            "PRODUCTION AGENT DIRECTIONS - APPLY WITHOUT OVERRIDING CANONICAL LOCKS:\n"
+            + json.dumps(agent_preflight, ensure_ascii=False, default=str)
+            + "\n\n"
+            + prompt
+        )
     # Veo does not expose text-model style billing tokens for video generation.
     # Keep an explicit estimate for prompt complexity and track video usage in
     # requested seconds/generations separately so the UI never presents a fake
@@ -1794,6 +1867,7 @@ def render_shot(
             "previous_take_frame": None,
             "scene_frame": package.get("scene_frame"),
             "speech_mode": package.get("speech_mode", "silent"),
+            "production_agents": agent_preflight,
             "usage": {
                 "prompt_tokens_estimated": prompt_tokens_estimated,
                 "prompt_tokens_source": "utf8_chars_div_4_estimate",
@@ -1851,6 +1925,28 @@ def render_shot(
     take.uri = uri
     take.status = ShotTake.Status.REVIEW
     take.save(update_fields=["uri", "status"])
+    if _production_agents_enabled():
+        from agents.roles.production_reviewer import ProductionReviewer
+
+        qa = ProductionReviewer().review(
+            shot={
+                "id": shot.id,
+                "index": shot.index,
+                "text": shot.text,
+                "video_prompt": shot.video_prompt,
+                "reference_uids": list(shot.reference_uids or []),
+            },
+            take={
+                "id": take.id,
+                "number": take.number,
+                "uri": take.uri,
+                "backend": take.backend,
+                "generation_meta": take.generation_meta,
+            },
+            continuity=package["context"],
+        )
+        take.generation_meta = {**(take.generation_meta or {}), "production_review": qa}
+        take.save(update_fields=["generation_meta"])
     Asset.objects.create(
         project=project, beat=shot.beat, shot=shot, shot_take=take,
         kind=Asset.Kind.VIDEO, role=Asset.Role.CLIP, uri=uri, provider=take.backend,
