@@ -138,6 +138,40 @@ class GoogleTextBackend:
         payload["_model"] = model
         return payload
 
+    def generate_json_with_images(self, system: str, user: str, images: list[str]) -> dict:
+        """Structured multimodal review over local/GCS Studio image assets."""
+        from google.genai import types
+        import mimetypes
+
+        model = getattr(self, "model_override", None) or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        contents = [types.Part.from_text(text=user)]
+        for uri in images or []:
+            local = _local_media_path(uri)
+            if local is not None:
+                mime = mimetypes.guess_type(str(local))[0] or "image/jpeg"
+                contents.append(types.Part.from_bytes(data=local.read_bytes(), mime_type=mime))
+            elif str(uri).startswith("gs://"):
+                mime = mimetypes.guess_type(str(uri))[0] or "image/jpeg"
+                contents.append(types.Part.from_uri(file_uri=str(uri), mime_type=mime))
+        client = _client()
+        try:
+            response = _with_quota_retry(lambda: client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    response_mime_type="application/json",
+                    temperature=0.2,
+                ),
+            ))
+        finally:
+            client.close()
+        payload = _parse_json(response.text or "")
+        payload["_provider"] = self.provider_id
+        payload["_model"] = model
+        payload["_images_reviewed"] = len(images or [])
+        return payload
+
 
 class GoogleImageBackend:
     provider_id = "google-nano-banana"
