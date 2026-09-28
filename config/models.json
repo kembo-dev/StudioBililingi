@@ -35,6 +35,9 @@
     "beat_segmenter": {},
     "shot_planner": {},
     "beat_rewriter": {},
-    "art_director": {}
+    "art_director": {},
+    "video_director": {},
+    "continuity_supervisor": {},
+    "production_reviewer": {}
   }
 }
