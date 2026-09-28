@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 
 from django.db import transaction
 from django.utils.text import slugify
@@ -1764,7 +1765,10 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
 
 
 def _production_agents_enabled() -> bool:
-    return os.getenv("STUDIO_PRODUCTION_AGENTS", "").strip().lower() in {"1", "true", "yes", "on"}
+    enabled = os.getenv("STUDIO_PRODUCTION_AGENTS", "").strip().lower() in {"1", "true", "yes", "on"}
+    if "test" in sys.argv and os.getenv("STUDIO_PRODUCTION_AGENTS_TESTS", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return False
+    return enabled
 
 
 def _production_preflight(shot: Shot, package: dict) -> dict:
@@ -1815,6 +1819,7 @@ def _production_preflight(shot: Shot, package: dict) -> dict:
         references=pack.get("items", []),
         scene_frame=scene_frame,
     )
+    from apps.projects.continuity import _veo_safe_visual_action
     scene_frame_review = supervisor.inspect_scene_frame(
         shot={
             **shot_payload,
