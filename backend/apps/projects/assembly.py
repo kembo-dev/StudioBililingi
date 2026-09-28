@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -54,6 +55,8 @@ def assemble_episode(episode: Episode) -> Asset:
 
     project = episode.season.project
     production_agents_enabled = os.getenv("STUDIO_PRODUCTION_AGENTS", "").strip().lower() in {"1", "true", "yes", "on"}
+    if "test" in sys.argv and os.getenv("STUDIO_PRODUCTION_AGENTS_TESTS", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        production_agents_enabled = False
     editor_plan = {}
     sound_plan = []
     if production_agents_enabled:
