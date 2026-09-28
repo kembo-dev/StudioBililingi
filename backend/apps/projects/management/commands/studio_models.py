@@ -14,6 +14,9 @@ ROLE_MODALITIES = {
     "video_director": "text",
     "continuity_supervisor": "text",
     "production_reviewer": "text",
+    "voice_director": "text",
+    "editor": "text",
+    "sound_director": "text",
     "art_director": "image",
 }
 
