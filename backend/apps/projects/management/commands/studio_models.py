@@ -11,6 +11,9 @@ ROLE_MODALITIES = {
     "beat_segmenter": "text",
     "shot_planner": "text",
     "beat_rewriter": "text",
+    "video_director": "text",
+    "continuity_supervisor": "text",
+    "production_reviewer": "text",
     "art_director": "image",
 }
 
