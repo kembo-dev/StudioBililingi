@@ -34,6 +34,32 @@ class ProductionPipelineTests(TestCase):
             logline="Test",
         )
 
+    def test_continuity_supervisor_rejects_visually_incompatible_scene_frame(self):
+        from agents.roles.continuity_supervisor import ContinuitySupervisor
+
+        class FakeText:
+            def generate_json_with_images(self, *, system, user, images):
+                self.images = images
+                return {
+                    "suitable": False,
+                    "status": "fail",
+                    "errors": ["La Scene Frame montre une maison au sol alors que le shot exige une vue aérienne urbaine."],
+                    "warnings": [],
+                    "checks": [{"name": "shot_visual_match", "status": "fail"}],
+                }
+
+        supervisor = ContinuitySupervisor.__new__(ContinuitySupervisor)
+        supervisor.text = FakeText()
+        result = supervisor.inspect_scene_frame(
+            shot={"visual_action": "Vue aérienne grand angle sur les toits de Kinshasa."},
+            scene_frame={"uri": "/media/refs/scene.png"},
+        )
+
+        self.assertFalse(result["suitable"])
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(supervisor.text.images, ["/media/refs/scene.png"])
+        self.assertTrue(result["errors"])
+
     def test_project_delete_cascades_locked_scene_plan_segmentation(self):
         from apps.story.models import ScenePlan, Segmentation
         script = Script.objects.create(episode=self.episode, version=1, fountain="Script")
