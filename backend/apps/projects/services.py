@@ -1731,6 +1731,18 @@ def review_shot(shot: Shot, decision: str, comment: str = "", take_id: int | Non
     if decision == "approve":
         if take is None or not take.uri:
             raise ValueError("Impossible de verrouiller un take sans vidéo")
+        production_review = (take.generation_meta or {}).get("production_review") or {}
+        verdict = str(production_review.get("verdict") or "").strip().lower()
+        if verdict == "revise":
+            issues = [
+                str(item).strip()
+                for item in (production_review.get("issues") or [])
+                if str(item).strip()
+            ]
+            detail = "; ".join(issues[:5]) or "le contrôle de production demande une révision"
+            raise ValueError(
+                "Impossible de verrouiller ce take: Production Reviewer = revise. " + detail
+            )
         shot.takes.exclude(pk=take.pk).filter(status=ShotTake.Status.LOCKED).update(status=ShotTake.Status.REVIEW)
         take.status = ShotTake.Status.LOCKED
         take.save(update_fields=["status"])
