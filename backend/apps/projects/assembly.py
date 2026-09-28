@@ -53,6 +53,54 @@ def assemble_episode(episode: Episode) -> Asset:
             locked.append((beat, shot, take))
 
     project = episode.season.project
+    production_agents_enabled = os.getenv("STUDIO_PRODUCTION_AGENTS", "").strip().lower() in {"1", "true", "yes", "on"}
+    editor_plan = {}
+    sound_plan = []
+    if production_agents_enabled:
+        from agents.roles.editor import Editor
+        from agents.roles.sound_director import SoundDirector
+
+        editor_plan = Editor().plan(
+            episode={
+                "id": episode.id,
+                "number": episode.number,
+                "title": episode.title,
+                "logline": episode.logline,
+            },
+            shots=[
+                {
+                    "beat_id": beat.id,
+                    "beat_index": beat.index,
+                    "shot_id": shot.id,
+                    "shot_index": shot.index,
+                    "take_id": take.id,
+                    "take_number": take.number,
+                    "duration_seconds": float(shot.duration_seconds),
+                }
+                for beat, shot, take in locked
+            ],
+        )
+        for beat in beats:
+            sound_plan.append({
+                "beat_id": beat.id,
+                "beat_index": beat.index,
+                "direction": SoundDirector().direct(
+                    beat={
+                        "id": beat.id,
+                        "index": beat.index,
+                        "text": beat.text,
+                        "dialogue": beat.dialogue,
+                        "continuity": beat.continuity,
+                    },
+                    audio_contract=project.audio_contract or {},
+                    scene={
+                        "id": beat.scene_id,
+                        "heading": beat.scene.heading if beat.scene_id else "",
+                        "summary": beat.scene.summary if beat.scene_id else "",
+                    },
+                ),
+            })
+
     media_root = str(settings.MEDIA_ROOT)
     relative_dir = os.path.join("episodes", f"{project.id}-{project.slug}", f"episode-{episode.id}")
     output_dir = os.path.join(media_root, relative_dir)
@@ -75,6 +123,9 @@ def assemble_episode(episode: Episode) -> Asset:
             "episode_id": episode.id, "script_id": latest_script.id,
             "segmentation_id": segmentation.id if segmentation else None,
             "shots": [{"beat_id": beat.id, "shot_id": shot.id, "take_id": take.id, "number": take.number} for beat, shot, take in locked],
+            "editor_plan": editor_plan,
+            "sound_plan": sound_plan,
+            "production_agents_enabled": production_agents_enabled,
         },
     )
 
