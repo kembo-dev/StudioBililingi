@@ -1928,6 +1928,16 @@ def render_shot(
     if _production_agents_enabled():
         from agents.roles.production_reviewer import ProductionReviewer
 
+        review_frames = []
+        try:
+            review_frames = backend.extract_review_frames(
+                take.uri,
+                project_key=project_key,
+                count=int(os.getenv("STUDIO_REVIEW_FRAME_COUNT", "3")),
+            )
+        except (AttributeError, RuntimeError, ValueError, OSError):
+            review_frames = []
+
         qa = ProductionReviewer().review(
             shot={
                 "id": shot.id,
@@ -1944,8 +1954,13 @@ def render_shot(
                 "generation_meta": take.generation_meta,
             },
             continuity=package["context"],
+            frames=review_frames,
         )
-        take.generation_meta = {**(take.generation_meta or {}), "production_review": qa}
+        take.generation_meta = {
+            **(take.generation_meta or {}),
+            "production_review": qa,
+            "review_frames": review_frames,
+        }
         take.save(update_fields=["generation_meta"])
     Asset.objects.create(
         project=project, beat=shot.beat, shot=shot, shot_take=take,
