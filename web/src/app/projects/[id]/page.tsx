@@ -8,7 +8,8 @@ import { api, mediaUrl } from "@/lib/api";
 
 type BeatTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string };
 type GenerationIngredient = { role?: string; key?: string; reference_uid?: string; uri?: string; name?: string };
-type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; previous_take_frame?: string | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string; adjustment_mode?: string; adjustment_reference_uri?: string | null } };
+type ProductionReview = { verdict?: "pass" | "revise" | "unknown" | string; issues?: string[]; checks?: unknown[]; visual_checks?: unknown[]; visual_review?: boolean; reviewed_frames?: string[] };
+type ShotTake = { id: number; number: number; prompt: string; uri: string; status: string; backend: string; generation_meta?: { ingredients?: GenerationIngredient[]; media_items?: GenerationIngredient[]; veo_reference_items?: GenerationIngredient[]; reference_uids?: string[]; previous_take?: { id?: number; number?: number; uri?: string } | null; previous_take_frame?: string | null; language_locked?: boolean; dialogue_language_policy?: string; adjustment_prompt?: string; adjustment_mode?: string; adjustment_reference_uri?: string | null; production_review?: ProductionReview; review_frames?: string[] } };
 type Shot = { id: number; index: number; text: string; duration_seconds: number | string; video_prompt: string; continuity?: { active_staging_instruction?: string; staging_revisions?: { instruction?: string; intent?: string; performance?: string; camera?: string; sound?: string }[] }; reference_uids?: string[]; status: string; clip_uri?: string | null; takes: ShotTake[] };
 type Scene = { id: number; index: number; heading: string; summary: string; time_of_day: string; lighting: string };
 type Beat = {
@@ -774,9 +775,48 @@ export default function ProjectPage() {
                             {shot.takes?.length ? <div className="mt-2 flex flex-wrap gap-2">{shot.takes.map((take) => (
                               <div key={take.id} className="flex items-center gap-2 rounded border border-[#2a2e38] px-2 py-1 text-xs">
                                 <span>Take {take.number} · {take.status}</span>
-                                {take.uri && take.status !== "locked" ? <button onClick={() => run(`lock-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "approve", take_id: take.id })} className="text-[#e8c36a]">Verrouiller</button> : null}
+                                {take.generation_meta?.production_review?.verdict ? (
+                                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                                    take.generation_meta.production_review.verdict === "pass"
+                                      ? "border-green-500/40 text-green-400"
+                                      : take.generation_meta.production_review.verdict === "revise"
+                                        ? "border-red-500/40 text-red-300"
+                                        : "border-amber-500/40 text-amber-300"
+                                  }`}>
+                                    QA {take.generation_meta.production_review.verdict}
+                                  </span>
+                                ) : null}
+                                {take.uri && take.status !== "locked" && take.generation_meta?.production_review?.verdict !== "revise" ? <button onClick={() => run(`lock-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "approve", take_id: take.id })} className="text-[#e8c36a]">Verrouiller</button> : null}
+                                {take.generation_meta?.production_review?.verdict === "revise" ? <span className="text-[10px] text-red-300">Verrouillage bloqué par le contrôle QA</span> : null}
                                 {take.status === "locked" ? <span className="text-green-400">✓ choisi</span> : null}
                                 {take.uri && take.status !== "locked" ? <button onClick={() => run(`reject-shot-take-${take.id}`, `/api/shots/${shot.id}/review/`, { decision: "reject", take_id: take.id })} className="text-red-300">Rejeter</button> : null}
+                                {take.generation_meta?.production_review ? (
+                                  <details className="w-full basis-full rounded border border-[#2a2e38] bg-[#0b0c10] p-2">
+                                    <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.12em] text-[#e8c36a]">
+                                      Contrôle production · {take.generation_meta.production_review.visual_review ? "vision activée" : "métadonnées uniquement"}
+                                    </summary>
+                                    <div className="mt-2 space-y-2">
+                                      {take.generation_meta.production_review.issues?.length ? (
+                                        <div className="rounded border border-red-500/30 bg-red-500/5 p-2">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-300">Problèmes détectés</p>
+                                          <ul className="mt-1 list-disc space-y-1 pl-4 text-[10px] text-red-200">
+                                            {take.generation_meta.production_review.issues.map((issue, issueIndex) => <li key={issueIndex}>{issue}</li>)}
+                                          </ul>
+                                        </div>
+                                      ) : <p className="text-[10px] text-green-400">✓ Aucun problème bloquant signalé par le Production Reviewer.</p>}
+                                      {(take.generation_meta.review_frames?.length || take.generation_meta.production_review.reviewed_frames?.length) ? (
+                                        <div>
+                                          <p className="mb-2 text-[10px] uppercase tracking-wide text-[#9aa3b2]">Frames QA analysées</p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {(take.generation_meta.review_frames ?? take.generation_meta.production_review.reviewed_frames ?? []).map((frame, frameIndex) => (
+                                              <img key={frame} src={mediaUrl(frame)} alt={`Frame QA ${frameIndex + 1} du Take ${take.number}`} className="h-24 w-40 rounded border border-[#2a2e38] bg-black object-cover" />
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : <p className="text-[10px] text-amber-300">Aucune frame visuelle analysée pour ce take.</p>}
+                                    </div>
+                                  </details>
+                                ) : null}
                                 {take.generation_meta?.ingredients?.length ? (
                                   <details className="w-full basis-full border-t border-[#2a2e38] pt-2">
                                     <summary className="cursor-pointer text-[10px] uppercase tracking-[0.12em] text-[#e8c36a]">Références Veo · {take.generation_meta.veo_reference_items?.length ?? 0} envoyée(s)</summary>
