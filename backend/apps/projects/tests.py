@@ -228,6 +228,64 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(_veo_shot_durations(9), [8, 8])
         self.assertEqual(_veo_shot_durations(20), [8, 8, 8])
 
+    def test_scene_frame_is_not_recorded_as_previous_take_frame(self):
+        from unittest.mock import patch
+        from apps.projects.services import render_shot
+        from apps.story.models import Shot
+        from apps.production.models import Asset
+
+        persist_bible(self.project, {
+            "characters": [],
+            "locations": [{"id": "maison", "name": "Maison", "look": "maison canonique"}],
+            "props": [],
+        })
+        Asset.objects.create(
+            project=self.project,
+            kind=Asset.Kind.IMAGE,
+            role=Asset.Role.LOCATION_REF,
+            uri="/media/refs/maison.png",
+            meta={"key": "maison"},
+        )
+        beat = persist_beats(self.episode, [{
+            "text": "Plan extérieur.",
+            "location_id": "maison",
+            "scene_index": 1,
+            "duration_seconds": 8,
+            "video_prompt": "Exterior house shot.",
+        }])[0]
+        shot = Shot.objects.create(
+            beat=beat,
+            index=1,
+            text="Plan extérieur.",
+            duration_seconds=8,
+            video_prompt="Exterior house shot.",
+        )
+        Asset.objects.create(
+            project=self.project,
+            beat=beat,
+            kind=Asset.Kind.IMAGE,
+            role=Asset.Role.START_FRAME,
+            uri="/media/scene-frames/beat.jpg",
+            meta={"scene_frame": True, "locked": True},
+        )
+
+        class FakeVideo:
+            provider_id = "fake-veo"
+
+            def render(self, prompt, **kwargs):
+                self.kwargs = kwargs
+                return "/media/clips/scene-frame.mp4"
+
+        backend = FakeVideo()
+        with patch("agents.backends.get_video", return_value=backend):
+            render_shot(shot)
+
+        take = shot.takes.order_by("-number").first()
+        self.assertEqual(backend.kwargs["start_frame"], "/media/scene-frames/beat.jpg")
+        self.assertIsNone(take.generation_meta["previous_take_frame"])
+        self.assertEqual(take.generation_meta["start_frame_uri"], "/media/scene-frames/beat.jpg")
+        self.assertEqual(take.generation_meta["start_frame_source"], "scene_frame")
+
     def test_adjusted_take_uses_previous_take_frame_instead_of_asset_refs(self):
         from unittest.mock import patch
         from apps.projects.services import render_shot
