@@ -1912,10 +1912,26 @@ def render_shot(
         except (AttributeError, RuntimeError, ValueError):
             baseline_frame = None
     if baseline_frame:
+        previous_take_frame = None
+        if (
+            str(adjustment_prompt or "").strip()
+            and not str(adjustment_reference_uri or "").strip()
+            and previous_take
+            and previous_take.get("uri")
+        ):
+            previous_take_frame = baseline_frame
         take.generation_meta = {
             **(take.generation_meta or {}),
-            "previous_take_frame": baseline_frame if not adjustment_reference_uri else None,
+            "previous_take_frame": previous_take_frame,
             "adjustment_reference_uri": str(adjustment_reference_uri or "").strip() or None,
+            "start_frame_uri": baseline_frame,
+            "start_frame_source": (
+                "adjustment_reference"
+                if str(adjustment_reference_uri or "").strip()
+                else "previous_take"
+                if previous_take_frame
+                else "scene_frame"
+            ),
         }
         take.save(update_fields=["generation_meta"])
     try:
