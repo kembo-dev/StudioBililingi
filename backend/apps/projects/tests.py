@@ -337,6 +337,52 @@ class ProductionPipelineTests(TestCase):
         self.assertEqual(first.status, ShotTake.Status.REVIEW)
         self.assertEqual(shot.status, Beat.Status.LOCKED)
 
+    def test_shot_review_refuses_lock_when_production_reviewer_requires_revision(self):
+        beat = persist_beats(self.episode, [{"text": "Beat narratif", "duration_seconds": 8}])[0]
+        payload = {"shots": [{"text": "Plan", "video_prompt": "Plan"}]}
+        with patch("agents.roles.shot_planner.ShotPlanner.plan", return_value=payload):
+            shot = plan_beat_shots(beat)[0]
+        take = ShotTake.objects.create(
+            shot=shot,
+            number=1,
+            uri="file:///tmp/revise.mp4",
+            status=ShotTake.Status.REVIEW,
+            generation_meta={
+                "production_review": {
+                    "verdict": "revise",
+                    "issues": ["Le visage ne correspond pas à la référence canonique"],
+                }
+            },
+        )
+
+        with self.assertRaisesMessage(ValueError, "Production Reviewer = revise"):
+            review_shot(shot, "approve", take_id=take.id)
+
+        take.refresh_from_db()
+        shot.refresh_from_db()
+        self.assertEqual(take.status, ShotTake.Status.REVIEW)
+        self.assertNotEqual(shot.status, Beat.Status.LOCKED)
+
+    def test_shot_review_allows_lock_when_production_reviewer_passes(self):
+        beat = persist_beats(self.episode, [{"text": "Beat narratif", "duration_seconds": 8}])[0]
+        payload = {"shots": [{"text": "Plan", "video_prompt": "Plan"}]}
+        with patch("agents.roles.shot_planner.ShotPlanner.plan", return_value=payload):
+            shot = plan_beat_shots(beat)[0]
+        take = ShotTake.objects.create(
+            shot=shot,
+            number=1,
+            uri="file:///tmp/pass.mp4",
+            status=ShotTake.Status.REVIEW,
+            generation_meta={"production_review": {"verdict": "pass", "issues": []}},
+        )
+
+        review_shot(shot, "approve", take_id=take.id)
+
+        take.refresh_from_db()
+        shot.refresh_from_db()
+        self.assertEqual(take.status, ShotTake.Status.LOCKED)
+        self.assertEqual(shot.status, Beat.Status.LOCKED)
+
     def test_review_locks_exact_take_and_unlocks_previous(self):
         beat = persist_beats(self.episode, [{"text": "Beat"}])[0]
         first = BeatTake.objects.create(beat=beat, number=1, uri="file:///tmp/one.mp4", status=BeatTake.Status.LOCKED)
