@@ -253,6 +253,41 @@ class GoogleVideoBackend:
             )
         return f"/media/{relative.as_posix()}/{output.name}"
 
+    def extract_review_frames(self, video_uri: str, *, project_key: str | None = None, count: int = 3) -> list[str]:
+        """Extract representative frames for visual QA without decoding the full video in Python."""
+        import subprocess
+
+        source = _local_media_path(video_uri)
+        if source is None:
+            raise ValueError("Take is not available as a local Studio video")
+        relative = Path("review-frames")
+        if project_key:
+            relative /= _safe_media_segment(project_key)
+        directory = _media_root() / relative
+        directory.mkdir(parents=True, exist_ok=True)
+        count = max(1, min(5, int(count or 3)))
+        # Sample evenly over the generated clip. Veo clips are currently 4-8 seconds.
+        if count == 1:
+            timestamps = [0.5]
+        else:
+            timestamps = [0.35 + (7.0 - 0.35) * i / (count - 1) for i in range(count)]
+        uris = []
+        for index, timestamp in enumerate(timestamps):
+            output = directory / f"{uuid.uuid4().hex}-{index}.jpg"
+            command = [
+                "ffmpeg", "-y", "-ss", f"{timestamp:.2f}", "-i", str(source),
+                "-frames:v", "1", "-q:v", "2", str(output),
+            ]
+            try:
+                result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise RuntimeError(f"Unable to extract QA frame: {exc}") from exc
+            if result.returncode == 0 and output.exists():
+                uris.append(f"/media/{relative.as_posix()}/{output.name}")
+        if not uris:
+            raise RuntimeError("Unable to extract any QA frame from generated take")
+        return uris
+
     def render(
         self,
         prompt: str,
